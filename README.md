@@ -32,6 +32,14 @@ The `gitlab_git_data_dir` is the location where all the Git repositories will be
 
 Whether to allow open registration (Sign-up). For public instances it's recommended to keep this set to `false`.
 
+    gitlab_2fa_mandatory: true
+
+Whether to require all users to enable two-factor authentication (2FA). For public instances it is recommended to set this to `true`.
+
+    gitlab_2fa_grace_period_hours: 48
+
+Grace period (in hours) users have to enable 2FA after sign-in when `gitlab_2fa_mandatory` is `true`.
+
     gitlab_backup_path: "/var/opt/gitlab/backups"
 
 The `gitlab_backup_path` is the location where Gitlab backups will be stored.

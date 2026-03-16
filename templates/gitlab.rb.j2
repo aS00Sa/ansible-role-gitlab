@@ -17,6 +17,10 @@ gitlab_rails['gitlab_default_theme'] = "{{ gitlab_default_theme }}"
 # Whether to allow open registration (Sign-up).
 gitlab_rails['gitlab_signup_enabled'] = {{ gitlab_signup_enabled | lower }}
 
+# Two-factor authentication (2FA) policy.
+gitlab_rails['otp_mandatory_for_users'] = {{ gitlab_2fa_mandatory | lower }}
+gitlab_rails['two_factor_grace_period'] = {{ gitlab_2fa_grace_period_hours }}
+
 # Whether to redirect http to https.
 nginx['redirect_http_to_https'] = {{ gitlab_redirect_http_to_https | lower }}
 nginx['ssl_certificate'] = "{{ gitlab_ssl_certificate }}"

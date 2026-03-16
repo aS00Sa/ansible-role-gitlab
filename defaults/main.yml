@@ -66,6 +66,12 @@ gitlab_default_theme: '2'
 # WARNING: For public instances, it's recommended to disable open registration.
 gitlab_signup_enabled: false
 
+# Two-factor authentication (2FA) policy.
+# If true, all users will be required to enable 2FA within a grace period.
+gitlab_2fa_mandatory: false
+# Grace period in hours users have to enable 2FA after sign-in.
+gitlab_2fa_grace_period_hours: 48
+
 # Email configuration.
 gitlab_email_enabled: false
 gitlab_email_from: "gitlab@example.com"
