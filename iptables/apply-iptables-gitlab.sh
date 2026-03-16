@@ -6,6 +6,8 @@ set -euo pipefail
 ##GitLab Shell	Yes	Port		22
 ##NGINX status	Yes	Port		8060
 
+#sudo apt install iptables-persistent
+
 PORTS_TCP="${PORTS_TCP:-22,80,443,8060,24819}"
 ALLOW_ICMP="${ALLOW_ICMP:-1}"
 ALLOW_ICMPV6="${ALLOW_ICMPV6:-1}"
@@ -27,8 +29,8 @@ Environment variables:
   ALLOW_ICMPV6=1|0
 
 Examples:
-  sudo PORTS_TCP="22,443" ./scripts/apply-iptables-gitlab.sh
-  sudo ALLOW_ICMP=0 ALLOW_ICMPV6=0 ./scripts/apply-iptables-gitlab.sh
+  sudo PORTS_TCP="22,443" ./iptables/apply-iptables-gitlab.sh
+  sudo ALLOW_ICMP=0 ALLOW_ICMPV6=0 ./iptables/apply-iptables-gitlab.sh
 EOF
 }
 
