@@ -1,5 +1,7 @@
 ## Скрипт защиты GitLab iptables
 
+sudo apt install iptables-persistent
+
 Этот каталог содержит скрипт `apply-iptables-gitlab.sh`, который настраивает строгие правила firewall для хоста с GitLab.
 
 ### Что делает скрипт
