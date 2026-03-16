@@ -28,6 +28,10 @@ The domain and URL at which the GitLab instance will be accessible. This is set 
 
 The `gitlab_git_data_dir` is the location where all the Git repositories will be stored. You can use a shared drive or any path on the system.
 
+    gitlab_signup_enabled: false
+
+Whether to allow open registration (Sign-up). For public instances it's recommended to keep this set to `false`.
+
     gitlab_backup_path: "/var/opt/gitlab/backups"
 
 The `gitlab_backup_path` is the location where Gitlab backups will be stored.

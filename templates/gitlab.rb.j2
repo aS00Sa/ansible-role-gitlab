@@ -14,6 +14,9 @@ gitlab_rails['gitlab_email_reply_to'] = "{{ gitlab_email_reply_to }}"
 # Default Theme
 gitlab_rails['gitlab_default_theme'] = "{{ gitlab_default_theme }}"
 
+# Whether to allow open registration (Sign-up).
+gitlab_rails['gitlab_signup_enabled'] = {{ gitlab_signup_enabled | lower }}
+
 # Whether to redirect http to https.
 nginx['redirect_http_to_https'] = {{ gitlab_redirect_http_to_https | lower }}
 nginx['ssl_certificate'] = "{{ gitlab_ssl_certificate }}"

@@ -62,6 +62,10 @@ gitlab_backup_keep_time: "604800"
 gitlab_download_validate_certs: true
 gitlab_default_theme: '2'
 
+# Sign-up / registration settings.
+# WARNING: For public instances, it's recommended to disable open registration.
+gitlab_signup_enabled: false
+
 # Email configuration.
 gitlab_email_enabled: false
 gitlab_email_from: "gitlab@example.com"
