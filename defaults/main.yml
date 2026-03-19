@@ -92,3 +92,8 @@ gitlab_registry_external_url: "https://gitlab.example.com:4567"
 #gitlab_registry_nginx_ssl_certificate: "/etc/gitlab/ssl/gitlab.crt"
 #gitlab_registry_nginx_ssl_certificate_key: "/etc/gitlab/ssl/gitlab.key"
 
+### Monitoring settings , '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '255.255.255.255/32'
+gitlab_rails['monitoring_whitelist'] = ['127.0.0.0/8', '::1/128']
+
+### Trusted proxies , '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'
+gitlab_rails['trusted_proxies'] = ['127.0.0.0/8', '::1/128']
