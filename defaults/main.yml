@@ -1,7 +1,8 @@
 ---
 # General config.
 gitlab_domain: gitlab.localdomain
-gitlab_external_url: "https://{{ gitlab_domain }}/"
+gitlab_ext_port: 8443
+gitlab_external_url: "https://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
 gitlab_git_data_dir: "/var/opt/gitlab/git-data"
 gitlab_edition: "gitlab-ce"
 gitlab_version: "18.9.1"
@@ -20,13 +21,15 @@ gitlab_letsencrypt_enable: false
 gitlab_redirect_http_to_https: false
 #gitlab_ssl_certificate: "/etc/gitlab/ssl/{{ gitlab_domain }}.crt"
 #gitlab_ssl_certificate_key: "/etc/gitlab/ssl/{{ gitlab_domain }}.key"
+gitlab_nginx_listen_port: "{{ gitlab_ext_port }}"
+gitlab_nginx_listen_https: false
 
 # SSL Self-signed Certificate Configuration.
 gitlab_create_self_signed_cert: false
 #gitlab_self_signed_cert_subj: "/C=US/ST=Missouri/L=Saint Louis/O=IT/CN={{ gitlab_domain }}"
 
 # LDAP Configuration.
-#gitlab_ldap_enabled: false
+gitlab_ldap_enabled: false
 #gitlab_ldap_host: "example.com"
 #gitlab_ldap_port: "389"
 #gitlab_ldap_uid: "sAMAccountName"
@@ -36,7 +39,7 @@ gitlab_create_self_signed_cert: false
 #gitlab_ldap_base: "DC=example,DC=com"
 
 # SMTP Configuration
-#gitlab_smtp_enable: false
+gitlab_smtp_enable: false
 #gitlab_smtp_address: "smtp.server"
 #gitlab_smtp_port: "465"
 #gitlab_smtp_user_name: "smtp user"
@@ -64,7 +67,7 @@ gitlab_dependencies:
 gitlab_time_zone: "Europe/Moscow"
 gitlab_backup_keep_time: "604800"
 #gitlab_download_validate_certs: true
-#gitlab_default_theme: '2'
+gitlab_default_theme: "2"
 
 # Sign-up / registration settings.
 # WARNING: For public instances, it's recommended to disable open registration.
@@ -77,7 +80,7 @@ gitlab_2fa_mandatory: true
 gitlab_2fa_grace_period_hours: 0
 
 # Email configuration.
-#gitlab_email_enabled: false
+gitlab_email_enabled: false
 #gitlab_email_from: "gitlab@{{ gitlab_domain }}"
 #gitlab_email_display_name: "Gitlab"
 #gitlab_email_reply_to: "gitlab@{{ gitlab_domain }}"
@@ -87,13 +90,49 @@ gitlab_2fa_grace_period_hours: 0
 #gitlab_nginx_ssl_client_certificate: ""
 
 # Registry configuration.
+# Можно совпадать с gitlab_external_url (тот же хост и порт): тогда Git/HTTPS и Docker
+# registry идут на один адрес; Omnibus-Nginx маршрутизирует /v2/ на registry.
+# Переопределите только gitlab_registry_external_url, если registry на другом хосте/порту.
 gitlab_registry_enable: true
-gitlab_registry_external_url: "https://gitlab.example.com:4567"
+# gitlab_registry_ext_port: 5050
+# gitlab_registry_external_url: "https://{{ gitlab_domain }}:{{ gitlab_registry_ext_port }}"
+gitlab_registry_external_url: "{{ gitlab_external_url }}"
 #gitlab_registry_nginx_ssl_certificate: "/etc/gitlab/ssl/gitlab.crt"
 #gitlab_registry_nginx_ssl_certificate_key: "/etc/gitlab/ssl/gitlab.key"
 
-### Monitoring settings , '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '255.255.255.255/32'
-gitlab_rails['monitoring_whitelist'] = ['127.0.0.0/8', '::1/128']
+# Monitoring and trusted proxy settings.
+# Use CIDR strings. Include only networks you trust.
+gitlab_monitoring_whitelist:
+  - "127.0.0.0/8"
+  - "::1/128"
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
 
-### Trusted proxies , '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'
-gitlab_rails['trusted_proxies'] = ['127.0.0.0/8', '::1/128']
+# gitlab_trusted_proxies — уровень Rails/GitLab приложения.
+# Нужен, чтобы само приложение считало эти прокси доверенными при обработке forwarded-заголовков 
+# и client IP внутри GitLab (логи, проверки, ограничения, audit и т.д.).
+gitlab_trusted_proxies:
+  - "127.0.0.0/8"
+  - "::1/128"
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
+
+# gitlab_nginx_real_ip_trusted_addresses — уровень NGINX (входящий HTTP).
+# Нужен, чтобы NGINX доверял X-Forwarded-For только от ваших прокси/LB и корректно вычислял реальный IP клиента.
+gitlab_nginx_real_ip_trusted_addresses:
+  - "127.0.0.0/8"
+  - "::1/128"
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
+gitlab_nginx_real_ip_header: "X-Forwarded-For"
+gitlab_nginx_real_ip_recursive: "on"
+#gitlab_nginx_real_ip_trusted_addresses: []
+
+# Если настроить только gitlab_trusted_proxies, но не настроить real_ip в NGINX — 
+# на входе может остаться IP прокси, и цепочка IP будет обработана не так, как ожидается.
+# Если настроить только real_ip_trusted_addresses, а gitlab_trusted_proxies оставить пустым — 
+# часть логики уже в Rails может работать неидеально при разборе proxy headers.
+# Поэтому для reverse-proxy обычно используют один и тот же список CIDR в обоих параметрах.
