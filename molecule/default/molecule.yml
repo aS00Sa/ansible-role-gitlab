@@ -6,6 +6,7 @@ driver:
   name: docker
 platforms:
   - name: instance
+    # Molecule test image (Ansible + systemd). Image name is upstream Docker Hub; role namespace is ansible-role.
     image: "geerlingguy/docker-${MOLECULE_DISTRO:-centos7}-ansible:latest"
     command: ${MOLECULE_DOCKER_COMMAND:-""}
     volumes:

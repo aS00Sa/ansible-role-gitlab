@@ -3,9 +3,9 @@ dependencies: []
 
 galaxy_info:
   role_name: gitlab
-  author: geerlingguy
+  author: ansible-role
   description: GitLab Git web interface
-  company: "Midwestern Mac, LLC"
+  company: "ansible-role"
   license: "license (BSD, MIT)"
   min_ansible_version: 2.10
   platforms:
