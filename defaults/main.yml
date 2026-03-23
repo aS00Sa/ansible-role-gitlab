@@ -66,7 +66,8 @@ gitlab_dependencies:
 # Optional settings.
 gitlab_time_zone: "Europe/Moscow"
 gitlab_backup_keep_time: "604800"
-#gitlab_download_validate_certs: true
+# Проверка TLS при скачивании скрипта установки репозитория GitLab (get_url).
+gitlab_download_validate_certs: true
 gitlab_default_theme: "2"
 
 # Sign-up / registration settings.
