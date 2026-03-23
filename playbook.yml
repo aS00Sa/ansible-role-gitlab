@@ -1,0 +1,10 @@
+---
+# Запуск из корня репозитория:
+#   ansible-playbook -i inventory.ini playbook.yml
+- name: Deploy GitLab (Omnibus)
+  hosts: gitlab_servers
+  become: true
+  tasks:
+    - name: Apply this role (каталог репозитория = корень роли)
+      ansible.builtin.include_role:
+        name: "{{ playbook_dir }}"

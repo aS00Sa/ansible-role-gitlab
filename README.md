@@ -9,11 +9,18 @@ Installs GitLab, a Ruby-based front-end to Git, on any RedHat/CentOS or Debian/U
 GitLab's default administrator account details are below; be sure to login immediately after installation and change these credentials!
 
     root
-    5iveL!fe
+    initial_root_password
 
 ## Requirements
 
-None.
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   pip install -U pip
+   pip install -r requirements.txt
+   
+   ansible-playbook -i inventory.ini playbook.yml
+   ```
 
 ## Role Variables
 
