@@ -1,6 +1,6 @@
 ---
-# Запуск из корня репозитория:
-#   ansible-playbook -i inventory.ini playbook.yml
+# Установка / настройка GitLab (Omnibus) из корня репозитория:
+#   ansible-playbook -i inventory.ini install.yml
 - name: Deploy GitLab (Omnibus)
   hosts: gitlab_servers
   become: true

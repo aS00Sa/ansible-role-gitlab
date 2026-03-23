@@ -1,0 +1,48 @@
+---
+# Удаление Omnibus GitLab с хостов (разрушительно при gitlab_remove_purge_data: true).
+#   ansible-playbook -i inventory.ini remove.yml
+# Редакция пакета (CE/EE), по умолчанию как в роли:
+#   ansible-playbook -i inventory.ini remove.yml -e gitlab_edition=gitlab-ee
+- name: Remove GitLab (Omnibus)
+  hosts: gitlab_servers
+  become: true
+  vars:
+    # true — удалить каталоги данных и конфигурации (репозитории, БД в составе Omnibus — пропадут).
+    gitlab_remove_purge_data: false
+
+  tasks:
+    - name: Stop GitLab services
+      ansible.builtin.command: gitlab-ctl stop
+      register: gitlab_ctl_stop
+      changed_when: gitlab_ctl_stop.rc == 0
+      failed_when: false
+
+    - name: Run gitlab-ctl uninstall (cron и пр., если команда есть)
+      ansible.builtin.command: gitlab-ctl uninstall
+      register: gitlab_ctl_uninstall
+      changed_when: gitlab_ctl_uninstall.rc == 0
+      failed_when: false
+
+    - name: Remove GitLab package (Debian, с purge конфигов пакета)
+      ansible.builtin.apt:
+        name: "{{ gitlab_edition | default('gitlab-ce') }}"
+        state: absent
+        purge: true
+      when: ansible_os_family == 'Debian'
+
+    - name: Remove GitLab package (RedHat family)
+      ansible.builtin.package:
+        name: "{{ gitlab_edition | default('gitlab-ce') }}"
+        state: absent
+      when: ansible_os_family == 'RedHat'
+
+    - name: Remove GitLab data and Omnibus directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/gitlab
+        - /var/opt/gitlab
+        - /var/log/gitlab
+        - /opt/gitlab
+      when: gitlab_remove_purge_data | bool
