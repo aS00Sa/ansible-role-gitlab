@@ -15,18 +15,47 @@ gitlab_config_template: "gitlab.rb.j2"
 
 # LetsEncrypt configuration.
 gitlab_letsencrypt_enable: false
-#gitlab_letsencrypt_contact_emails: ["gitlab@{{ gitlab_domain }}"]
-#gitlab_letsencrypt_auto_renew_hour: 1
-#gitlab_letsencrypt_auto_renew_minute: 30
-#gitlab_letsencrypt_auto_renew_day_of_month: "*/7"
-#gitlab_letsencrypt_auto_renew: true
+gitlab_letsencrypt_contact_emails: ["gitlab@{{ gitlab_domain }}"]
+gitlab_letsencrypt_auto_renew_hour: 1
+gitlab_letsencrypt_auto_renew_minute: 30
+gitlab_letsencrypt_auto_renew_day_of_month: "*/7"
+gitlab_letsencrypt_auto_renew: true
 
 # SSL Configuration.
 gitlab_redirect_http_to_https: false
+# Дублирует смысл nginx['redirect_http_to_https']; если не задано, в шаблоне берётся gitlab_redirect_http_to_https.
+#gitlab_nginx_redirect_http_to_https: false
 #gitlab_ssl_certificate: "/etc/gitlab/ssl/{{ gitlab_domain }}.crt"
 #gitlab_ssl_certificate_key: "/etc/gitlab/ssl/{{ gitlab_domain }}.key"
 gitlab_nginx_listen_port: "{{ gitlab_ext_port }}"
 gitlab_nginx_listen_https: false
+
+# --- hifis.toolkit-style Omnibus toggles (см. templates/gitlab.rb.j2) ---
+gitlab_use_internal_redis: true
+gitlab_redis_password: "changeme"
+gitlab_redis_cluster_name: "redis-cluster"
+gitlab_redis_sentinel_ips: []
+gitlab_redis_sentinel_port: "26379"
+gitlab_redis_sentinel_password: ""
+
+# Если gitlab_monitoring_whitelist не задан или пуст — fallback одной подсетью (нужен gather_facts).
+gitlab_ip_range: "{{ (ansible_default_ipv4 | default({})).address | default('127.0.0.1') }}/24"
+
+gitlab_use_internal_gitaly: true
+gitlab_gitaly_token: "changeme"
+gitlab_secret_token: "changeme"
+gitlab_gitaly_instance_ip: "127.0.0.1"
+gitlab_gitaly_instance_port: "8075"
+
+gitlab_use_internal_postgresql: true
+gitlab_postgresql_db_host: "127.0.0.1"
+gitlab_postgresql_db_password: "changeme"
+
+# Произвольные пары ключ/значение (как в hifis.toolkit gitlab_additional_configurations).
+#gitlab_additional_configurations: []
+
+# Вызовы верхнего уровня в gitlab.rb (как в hifis.toolkit gitlab_ruby_configuration_calls).
+#gitlab_ruby_configuration_calls: []
 
 # SSL Self-signed Certificate Configuration.
 gitlab_create_self_signed_cert: false
