@@ -1,3 +1,4 @@
 ---
+# apt: имя пакета задаётся как gitlab-ce=<полная_версия>, например 18.9.1-ce.0
 gitlab_package_version_separator: '='
 gitlab_repository_installation_script_url: "https://packages.gitlab.com/install/repositories/gitlab/{{ gitlab_edition }}/script.deb.sh"

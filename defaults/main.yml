@@ -5,7 +5,11 @@ gitlab_ext_port: 8443
 gitlab_external_url: "https://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
 gitlab_git_data_dir: "/var/opt/gitlab/git-data"
 gitlab_edition: "gitlab-ce"
-gitlab_version: "18.9.1"
+# Пустая строка — ставится последняя версия из репозитория GitLab (рекомендуется).
+# Для Debian/Ubuntu пин версии нужен полный суффикс пакета, иначе apt не найдёт кандидата:
+#   gitlab_version: "18.9.1-ce.0"
+# (не "18.9.1" — такого пакета в apt нет). Для RHEL суффикс другой, см. документацию GitLab.
+gitlab_version: ""
 gitlab_backup_path: "/var/opt/gitlab/backups"
 gitlab_config_template: "gitlab.rb.j2"
 
