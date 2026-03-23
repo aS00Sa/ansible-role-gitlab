@@ -19,7 +19,9 @@ GitLab's default administrator account details are below; be sure to login immed
    pip install -U pip
    pip install -r requirements.txt
    
-   ansible-playbook -i inventory.ini playbook.yml
+   ssh-copy-id -i /mnt/c/Users/x-shu/.ssh/id_rsa.pub debian@gitlab
+   
+   ANSIBLE_STDOUT_CALLBACK=yaml ANSIBLE_CONFIG="$PWD/ansible.cfg" ansible-playbook -i inventory.ini playbook.yml -u debian --private-key ~/.ssh/id_rsa 2>&1 | tee deploy-$(date +%Y%m%d-%H%M).log
    ```
 
 ## Role Variables
