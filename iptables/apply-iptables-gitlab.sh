@@ -8,7 +8,7 @@ set -euo pipefail
 
 #sudo apt install iptables-persistent
 
-PORTS_TCP="${PORTS_TCP:-22,80,443,24819}"
+PORTS_TCP="${PORTS_TCP:-22,80,443,8080,8443}"
 ALLOW_ICMP="${ALLOW_ICMP:-1}"
 ALLOW_ICMPV6="${ALLOW_ICMPV6:-1}"
 
@@ -24,7 +24,7 @@ Defaults:
   - Save via netfilter-persistent if available
 
 Environment variables:
-  PORTS_TCP="22,80,443,8060,24819"
+  PORTS_TCP="22,80,443,8080,8443"
   ALLOW_ICMP=1|0
   ALLOW_ICMPV6=1|0
 
