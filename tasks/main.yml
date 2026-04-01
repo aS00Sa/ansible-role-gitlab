@@ -37,7 +37,7 @@
 - name: Define the Gitlab package name.
   set_fact:
     gitlab_package_name: "{{ gitlab_edition }}{{ gitlab_package_version_separator }}{{ gitlab_version }}"
-  when: gitlab_version | default(false)
+  when: (gitlab_version | default('') | length) > 0
 
 - name: Install GitLab
   package:
@@ -79,3 +79,23 @@
     group: root
     mode: 0600
   notify: restart gitlab
+
+- name: Flush handlers before applying application settings
+  meta: flush_handlers
+
+- name: Enforce GitLab anti-lockout application settings
+  command: >
+    gitlab-rails runner
+    "s = ApplicationSetting.current;
+    updates = {};
+    updates[:failed_authentication_ban_for_git_and_api_enabled] = false if s.respond_to?(:failed_authentication_ban_for_git_and_api_enabled) && s.failed_authentication_ban_for_git_and_api_enabled != false;
+    updates[:max_login_attempts] = 99999 if s.respond_to?(:max_login_attempts) && s.max_login_attempts != 99999;
+    updates[:failed_login_attempts_unlock_period_in_minutes] = 1 if s.respond_to?(:failed_login_attempts_unlock_period_in_minutes) && s.failed_login_attempts_unlock_period_in_minutes != 1;
+    if updates.empty?;
+      puts 'GitLab anti-lockout settings are already up to date';
+    else
+      s.update!(updates);
+      puts \"Updated GitLab anti-lockout settings: #{updates.keys.join(', ')}\";
+    end"
+  register: gitlab_anti_lockout_settings
+  changed_when: "'Updated GitLab anti-lockout settings:' in gitlab_anti_lockout_settings.stdout"
