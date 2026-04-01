@@ -17,6 +17,14 @@ gitlab_rails['gitlab_email_reply_to'] = "{{ gitlab_email_reply_to }}"
 # Whether to allow open registration (Sign-up).
 gitlab_rails['gitlab_signup_enabled'] = {{ gitlab_signup_enabled | lower }}
 
+# Disable auto-ban/lock side effects on repeated bad credentials (browser/IDE stale passwords).
+# These are GitLab application settings applied during reconfigure.
+gitlab_rails['initial_application_settings'] = {
+  'failed_authentication_ban_for_git_and_api_enabled' => false,
+  'max_login_attempts' => 99999,
+  'failed_login_attempts_unlock_period_in_minutes' => 1
+}
+
 # Two-factor authentication (2FA) policy.
 gitlab_rails['otp_mandatory_for_users'] = {{ gitlab_2fa_mandatory | lower }}
 gitlab_rails['two_factor_grace_period'] = {{ gitlab_2fa_grace_period_hours }}
