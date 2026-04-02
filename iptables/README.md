@@ -15,6 +15,7 @@ sudo apt install iptables-persistent
   - новые входящие TCP-соединения на порты `22,80,443,8060,24819` (по умолчанию, можно переопределить);
   - ICMP/ICMPv6 (ping и служебные сообщения) — по умолчанию включено.
 - Применяет эквивалентные правила для IPv4 (`iptables`) и IPv6 (`ip6tables`).
+- Тюнинг PMTUD (по умолчанию включён): `net.ipv4.tcp_mtu_probing=1` в `/etc/sysctl.d/99-tcp-mtu-probing.conf` и правила `mangle` `TCPMSS --clamp-mss-to-pmtu` для `FORWARD`/`OUTPUT` (IPv4 и IPv6).
 - Пытается сохранить правила через `netfilter-persistent` (пакет `iptables-persistent` на Debian/Ubuntu).
 
 Перед изменениями текущая конфигурация iptables/ip6tables сохраняется в `/root/iptables-backups/`.
@@ -45,6 +46,7 @@ sudo apt install iptables-persistent
 
 - `ALLOW_ICMP` — `1` или `0`, разрешать ли ICMP (IPv4), по умолчанию `1`.
 - `ALLOW_ICMPV6` — `1` или `0`, разрешать ли ICMPv6, по умолчанию `1`.
+- `ENABLE_MTU_TUNING` — `1` или `0`, применять ли sysctl MTU probing и `TCPMSS` в `mangle`, по умолчанию `1`.
 
 Отключить ICMP/ICMPv6:
 
