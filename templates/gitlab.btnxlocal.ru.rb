@@ -7,6 +7,13 @@ nginx['listen_port'] = 8443
 nginx['listen_https'] = false
 nginx['listen_http']  = true
 
+# TLS terminates on reverse proxy (HAProxy/Traefik). Omnibus must not load local certs for nginx/registry.
+# See https://docs.gitlab.com/omnibus/settings/ssl/#configure-a-reverse-proxy-or-load-balancer-ssl-termination
+letsencrypt['enable'] = false
+nginx['redirect_http_to_https'] = false
+registry_nginx['listen_https'] = false
+registry_nginx['redirect_http_to_https'] = false
+
 ### GitLab Shell settings for GitLab
 gitlab_rails['gitlab_shell_ssh_port'] = 2222
 gitlab_rails['gitlab_shell_git_timeout'] = 10800
