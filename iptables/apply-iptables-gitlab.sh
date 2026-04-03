@@ -13,6 +13,14 @@ ALLOW_ICMP="${ALLOW_ICMP:-1}"
 ALLOW_ICMPV6="${ALLOW_ICMPV6:-1}"
 # PMTUD-friendly tuning: TCP MTU probing + TCPMSS clamp (set to 0 to skip).
 ENABLE_MTU_TUNING="${ENABLE_MTU_TUNING:-1}"
+# Comma-separated IPv4 «белый» доверенный: полный INPUT (любой порт). Остальной интернет к PORTS_TCP не пускаем.
+TRUSTED_IPV4_SOURCES="${TRUSTED_IPV4_SOURCES:-72.56.1.35}"
+# Comma-separated RFC1918 (и т.п.) подсети: только с них разрешён NEW TCP на PORTS_TCP.
+PRIVATE_IPV4_CIDRS="${PRIVATE_IPV4_CIDRS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}"
+# IPv6: приватные/локальные префиксы для того же ограничения TCP NEW. Пусто = не добавлять такие правила.
+PRIVATE_IPV6_CIDRS="${PRIVATE_IPV6_CIDRS:-fc00::/7,fe80::/10}"
+# Полный INPUT с доверенных IPv6 (редко нужно). Пусто = выкл.
+TRUSTED_IPV6_SOURCES="${TRUSTED_IPV6_SOURCES:-}"
 
 usage() {
   cat <<'EOF'
@@ -21,7 +29,8 @@ Apply strict inbound firewall rules for a GitLab host.
 Defaults:
   - INPUT/FORWARD policy: DROP
   - OUTPUT policy: ACCEPT
-  - Allow: loopback, ESTABLISHED/RELATED, NEW tcp to PORTS_TCP (default 22,80,443,8060,24819)
+  - Full inbound from trusted «white» IPv4 only (default 72.56.1.35); any other public IP — no service ports
+  - NEW TCP to PORTS_TCP only from private (gray) subnets RFC1918 (10/8, 172.16/12, 192.168/16)
   - Optionally allow ICMP/ICMPv6 (enabled by default)
   - Save via netfilter-persistent if available
   - Optional: sysctl net.ipv4.tcp_mtu_probing=1 and mangle TCPMSS clamp (ENABLE_MTU_TUNING=1)
@@ -31,6 +40,9 @@ Environment variables:
   ALLOW_ICMP=1|0
   ALLOW_ICMPV6=1|0
   ENABLE_MTU_TUNING=1|0
+  TRUSTED_IPV4_SOURCES — полный доступ; "" = отключить
+  PRIVATE_IPV4_CIDRS — с кого пускать NEW TCP на PORTS_TCP; "" = никого из «серых»
+  PRIVATE_IPV6_CIDRS / TRUSTED_IPV6_SOURCES — аналогично для IPv6
 
 Examples:
   sudo PORTS_TCP="22,443" ./iptables/apply-iptables-gitlab.sh
@@ -125,11 +137,37 @@ apply_v4() {
   iptables -w -A INPUT -i lo -j ACCEPT
   iptables -w -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
+  if [[ -n "${TRUSTED_IPV4_SOURCES}" ]]; then
+    local _saved_ifs="${IFS}"
+    IFS=','
+    read -r -a _trusted <<< "${TRUSTED_IPV4_SOURCES}"
+    IFS="${_saved_ifs}"
+    local src
+    for src in "${_trusted[@]}"; do
+      src="${src// /}"
+      [[ -z "${src}" ]] && continue
+      iptables -w -A INPUT -s "${src}" -j ACCEPT
+    done
+    echo "Allowed full INPUT from trusted IPv4: ${TRUSTED_IPV4_SOURCES}"
+  fi
+
   if [[ "${ALLOW_ICMP}" == "1" ]]; then
     iptables -w -A INPUT -p icmp -j ACCEPT
   fi
 
-  iptables -w -A INPUT -p tcp -m multiport --dports "${PORTS_TCP}" -m conntrack --ctstate NEW -j ACCEPT
+  if [[ -n "${PRIVATE_IPV4_CIDRS}" ]]; then
+    local _saved2="${IFS}"
+    IFS=','
+    read -r -a _priv <<< "${PRIVATE_IPV4_CIDRS}"
+    IFS="${_saved2}"
+    local cidr
+    for cidr in "${_priv[@]}"; do
+      cidr="${cidr// /}"
+      [[ -z "${cidr}" ]] && continue
+      iptables -w -A INPUT -p tcp -s "${cidr}" -m multiport --dports "${PORTS_TCP}" -m conntrack --ctstate NEW -j ACCEPT
+    done
+    echo "Allowed NEW TCP to [${PORTS_TCP}] only from private IPv4: ${PRIVATE_IPV4_CIDRS}"
+  fi
 }
 
 apply_v6() {
@@ -148,11 +186,37 @@ apply_v6() {
   ip6tables -w -A INPUT -i lo -j ACCEPT
   ip6tables -w -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
+  if [[ -n "${TRUSTED_IPV6_SOURCES}" ]]; then
+    local _s6="${IFS}"
+    IFS=','
+    read -r -a _t6 <<< "${TRUSTED_IPV6_SOURCES}"
+    IFS="${_s6}"
+    local s6
+    for s6 in "${_t6[@]}"; do
+      s6="${s6// /}"
+      [[ -z "${s6}" ]] && continue
+      ip6tables -w -A INPUT -s "${s6}" -j ACCEPT
+    done
+    echo "Allowed full INPUT from trusted IPv6: ${TRUSTED_IPV6_SOURCES}"
+  fi
+
   if [[ "${ALLOW_ICMPV6}" == "1" ]]; then
     ip6tables -w -A INPUT -p ipv6-icmp -j ACCEPT
   fi
 
-  ip6tables -w -A INPUT -p tcp -m multiport --dports "${PORTS_TCP}" -m conntrack --ctstate NEW -j ACCEPT
+  if [[ -n "${PRIVATE_IPV6_CIDRS}" ]]; then
+    local _p6="${IFS}"
+    IFS=','
+    read -r -a _pv6 <<< "${PRIVATE_IPV6_CIDRS}"
+    IFS="${_p6}"
+    local c6
+    for c6 in "${_pv6[@]}"; do
+      c6="${c6// /}"
+      [[ -z "${c6}" ]] && continue
+      ip6tables -w -A INPUT -p tcp -s "${c6}" -m multiport --dports "${PORTS_TCP}" -m conntrack --ctstate NEW -j ACCEPT
+    done
+    echo "Allowed NEW TCP to [${PORTS_TCP}] only from private/local IPv6: ${PRIVATE_IPV6_CIDRS}"
+  fi
 }
 
 persist_if_possible() {
@@ -189,7 +253,7 @@ main() {
   apply_mangle_tcpmss_v6
   persist_if_possible
 
-  echo "Done. Allowed inbound TCP ports: ${PORTS_TCP}"
+  echo "Done. PORTS_TCP=${PORTS_TCP} (NEW only from PRIVATE_IPV4_CIDRS; full INPUT from TRUSTED_IPV4_SOURCES)."
 }
 
 main "$@"
