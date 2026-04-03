@@ -8,7 +8,7 @@ set -euo pipefail
 
 #sudo apt install iptables-persistent
 
-PORTS_TCP="${PORTS_TCP:-22,80,443,8080,8443}"
+PORTS_TCP="${PORTS_TCP:-22,2222,80,443,8080,8443}"
 ALLOW_ICMP="${ALLOW_ICMP:-1}"
 ALLOW_ICMPV6="${ALLOW_ICMPV6:-1}"
 # PMTUD-friendly tuning: TCP MTU probing + TCPMSS clamp (set to 0 to skip).
@@ -36,7 +36,7 @@ Defaults:
   - Optional: sysctl net.ipv4.tcp_mtu_probing=1 and mangle TCPMSS clamp (ENABLE_MTU_TUNING=1)
 
 Environment variables:
-  PORTS_TCP="22,80,443,8080,8443"
+  PORTS_TCP="22,2222,80,443,8080,8443"
   ALLOW_ICMP=1|0
   ALLOW_ICMPV6=1|0
   ENABLE_MTU_TUNING=1|0
