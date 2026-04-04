@@ -1,0 +1,88 @@
+---
+# Системная локаль UTF-8 (ru) и часовой пояс — до установки GitLab.
+- name: Configure system timezone and ru_RU.UTF-8 locale
+  when: gitlab_enforce_system_locale | bool
+  block:
+    - name: Get current system timezone
+      ansible.builtin.command: timedatectl show -p Timezone --value
+      register: gitlab_tz_current
+      changed_when: false
+      failed_when: false
+
+    - name: Set system timezone
+      ansible.builtin.command: "timedatectl set-timezone {{ gitlab_system_timezone }}"
+      when:
+        - gitlab_tz_current.rc == 0
+        - gitlab_tz_current.stdout | default('') != gitlab_system_timezone
+
+    - name: Ensure tzdata is installed (Debian)
+      ansible.builtin.apt:
+        name: tzdata
+        state: present
+      when: ansible_os_family == 'Debian'
+
+    - name: Ensure locales package (Debian)
+      ansible.builtin.apt:
+        name: locales
+        state: present
+      when: ansible_os_family == 'Debian'
+
+    - name: Ensure ru_RU.UTF-8 enabled in locale.gen (Debian)
+      ansible.builtin.lineinfile:
+        path: /etc/locale.gen
+        line: "ru_RU.UTF-8 UTF-8"
+        regexp: '^[#\s]*ru_RU\.UTF-8\s+UTF-8'
+      when: ansible_os_family == 'Debian'
+      register: gitlab_locale_gen_line
+
+    - name: Regenerate locales (Debian)
+      ansible.builtin.command: locale-gen
+      when:
+        - ansible_os_family == 'Debian'
+        - gitlab_locale_gen_line is changed
+
+    - name: Set default system locale file (Debian)
+      ansible.builtin.copy:
+        dest: /etc/default/locale
+        content: |
+          LANG={{ gitlab_system_locale }}
+          LC_ALL={{ gitlab_system_locale }}
+        owner: root
+        group: root
+        mode: "0644"
+      when: ansible_os_family == 'Debian'
+      register: gitlab_default_locale_file
+
+    - name: Install Russian glibc langpack (RedHat 8+)
+      ansible.builtin.package:
+        name: glibc-langpack-ru
+        state: present
+      when:
+        - ansible_os_family == 'RedHat'
+        - ansible_distribution_major_version | int >= 8
+
+    - name: Ensure glibc-common for locales (RedHat 7)
+      ansible.builtin.package:
+        name: glibc-common
+        state: present
+      when:
+        - ansible_os_family == 'RedHat'
+        - ansible_distribution_major_version | int < 8
+
+    - name: Set system locale file (RedHat)
+      ansible.builtin.lineinfile:
+        path: /etc/locale.conf
+        regexp: '^LANG='
+        line: "LANG={{ gitlab_system_locale }}"
+        create: true
+        owner: root
+        group: root
+        mode: "0644"
+      when: ansible_os_family == 'RedHat'
+      register: gitlab_locale_conf_rh
+
+    - name: Apply locale with localectl (RedHat)
+      ansible.builtin.command: "localectl set-locale LANG={{ gitlab_system_locale }}"
+      when:
+        - ansible_os_family == 'RedHat'
+        - gitlab_locale_conf_rh is changed

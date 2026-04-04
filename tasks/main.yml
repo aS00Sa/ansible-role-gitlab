@@ -2,6 +2,10 @@
 - name: Include OS-specific variables.
   include_vars: "{{ ansible_os_family }}.yml"
 
+- name: Enforce system locale (ru_RU.UTF-8) and timezone (Europe/Moscow)
+  ansible.builtin.include_tasks: locale.yml
+  when: gitlab_enforce_system_locale | default(true) | bool
+
 - name: Check if GitLab configuration file already exists.
   stat: path=/etc/gitlab/gitlab.rb
   register: gitlab_config_file

@@ -1,4 +1,9 @@
 ---
+# Система: локаль и часовой пояс на ВМ (выполняется в начале роли). Отключить: gitlab_enforce_system_locale: false
+gitlab_enforce_system_locale: true
+gitlab_system_locale: ru_RU.UTF-8
+gitlab_system_timezone: Europe/Moscow
+
 # General config.
 gitlab_domain: gitlab.localdomain
 gitlab_ext_port: 8443
