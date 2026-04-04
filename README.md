@@ -18,15 +18,16 @@ GitLab's default administrator account details are below; be sure to login immed
    source .venv/bin/activate
    pip install -U pip
    pip install -r requirements.txt
-   
+   # Дальше либо оставьте venv активным, либо вызывайте .venv/bin/ansible-playbook явно.
+
    ssh-copy-id -i /mnt/c/Users/x-shu/.ssh/id_rsa.pub debian@gitlab
    
-   ANSIBLE_STDOUT_CALLBACK=yaml ANSIBLE_CONFIG="$PWD/ansible.cfg" ansible-playbook -i inventory.ini install.yml -u debian --private-key ~/.ssh/id_rsa 2>&1 | tee deploy-$(date +%Y%m%d-%H%M).log
+   ANSIBLE_STDOUT_CALLBACK=yaml ANSIBLE_CONFIG="$PWD/ansible.cfg" .venv/bin/ansible-playbook -i inventory.ini install.yml -u debian --private-key ~/.ssh/id_rsa 2>&1 | tee deploy-$(date +%Y%m%d-%H%M).log
 
    # Удаление пакета Omnibus (данные по умолчанию не трогаем):
-   # ansible-playbook -i inventory.ini remove.yml -u debian --private-key ~/.ssh/id_rsa
+   # .venv/bin/ansible-playbook -i inventory.ini remove.yml -u debian --private-key ~/.ssh/id_rsa
    # Полное стирание /etc/gitlab, /var/opt/gitlab и т.д.:
-   # ansible-playbook -i inventory.ini remove.yml -e gitlab_remove_purge_data=true
+   # .venv/bin/ansible-playbook -i inventory.ini remove.yml -e gitlab_remove_purge_data=true
    ```
 
 ## Role Variables
