@@ -55,6 +55,53 @@
   poll: 5
   when: not gitlab_file.stat.exists
 
+# Уже установленный Omnibus: подтянуть последнюю версию из репозитория (gitlab_version пустой) или пин (gitlab_version задан).
+- name: Upgrade GitLab to latest from repository (Debian, no version pin)
+  apt:
+    name: "{{ gitlab_edition }}"
+    state: latest
+    update_cache: true
+  async: 1800
+  poll: 10
+  notify: restart gitlab
+  when:
+    - gitlab_file.stat.exists | bool
+    - ansible_os_family == 'Debian'
+    - (gitlab_version | default('') | length) == 0
+
+- name: Ensure GitLab matches pinned package version (Debian)
+  apt:
+    name: "{{ gitlab_package_name }}"
+    state: present
+    update_cache: true
+  async: 1800
+  poll: 10
+  notify: restart gitlab
+  when:
+    - gitlab_file.stat.exists | bool
+    - ansible_os_family == 'Debian'
+    - (gitlab_version | default('') | length) > 0
+
+- name: Upgrade GitLab to latest from repository (RedHat, no version pin)
+  package:
+    name: "{{ gitlab_edition }}"
+    state: latest
+  notify: restart gitlab
+  when:
+    - gitlab_file.stat.exists | bool
+    - ansible_os_family == 'RedHat'
+    - (gitlab_version | default('') | length) == 0
+
+- name: Ensure GitLab matches pinned package version (RedHat)
+  package:
+    name: "{{ gitlab_package_name }}"
+    state: present
+  notify: restart gitlab
+  when:
+    - gitlab_file.stat.exists | bool
+    - ansible_os_family == 'RedHat'
+    - (gitlab_version | default('') | length) > 0
+
 # Start and configure GitLab. Sometimes the first run fails, but after that,
 # restarts fix problems, so ignore failures on this run.
 - name: Reconfigure GitLab (first run).

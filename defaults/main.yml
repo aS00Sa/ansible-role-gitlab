@@ -155,17 +155,18 @@ gitlab_registry_external_url: "{{ gitlab_external_url }}"
 # Use CIDR strings. Include only networks you trust.
 gitlab_monitoring_whitelist:
   - "127.0.0.0/8"
-  - "::1/128"
+  - "::1"
   - "10.0.0.0/8"
   - "172.16.0.0/12"
   - "192.168.0.0/16"
 
+# Не задавайте ::1 в gitlab_trusted_proxies: в сгенерированном gitlab.yml строка без кавычек, Psych читает ::1 как Symbol и Rails падает при IPAddr.new.
+# Локальный IPv6 всё равно доверяется (см. config/initializers/trusted_proxies.rb в GitLab).
 # gitlab_trusted_proxies — уровень Rails/GitLab приложения.
 # Нужен, чтобы само приложение считало эти прокси доверенными при обработке forwarded-заголовков 
 # и client IP внутри GitLab (логи, проверки, ограничения, audit и т.д.).
 gitlab_trusted_proxies:
   - "127.0.0.0/8"
-  - "::1/128"
   - "10.0.0.0/8"
   - "172.16.0.0/12"
   - "192.168.0.0/16"
@@ -174,7 +175,7 @@ gitlab_trusted_proxies:
 # Нужен, чтобы NGINX доверял X-Forwarded-For только от ваших прокси/LB и корректно вычислял реальный IP клиента.
 gitlab_nginx_real_ip_trusted_addresses:
   - "127.0.0.0/8"
-  - "::1/128"
+  - "::1"
   - "10.0.0.0/8"
   - "172.16.0.0/12"
   - "192.168.0.0/16"

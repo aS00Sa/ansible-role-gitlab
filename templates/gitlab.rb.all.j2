@@ -90,16 +90,23 @@ gitlab_rails['redis_sentinels_password'] = "{{ gitlab_redis_sentinel_password }}
 {% endif %}
 {% endif %}
 
-# Git data / Gitaly (hifis.toolkit style).
+# Git data / Gitaly (GitLab 18+: git_data_dirs удалён — см. Omnibus «Migrating from git_data_dirs»).
 {% if gitlab_use_internal_gitaly | default(true) | bool %}
-git_data_dirs({"default" => {"path" => "{{ gitlab_git_data_dir }}"} })
+gitaly['configuration'] = {
+  storage: [
+    {
+      name: 'default',
+      path: '{{ gitlab_git_data_dir }}/repositories',
+    },
+  ],
+}
 {% else %}
 gitaly['enable'] = false
 gitlab_rails['gitaly_token'] = "{{ gitlab_gitaly_token }}"
 gitlab_shell['secret_token'] = "{{ gitlab_secret_token }}"
-git_data_dirs({
- 'default' => { 'gitaly_address' => 'tcp://{{ gitlab_gitaly_instance_ip }}:{{ gitlab_gitaly_instance_port }}' },
-})
+gitlab_rails['repositories_storages'] = {
+  'default' => { 'gitaly_address' => 'tcp://{{ gitlab_gitaly_instance_ip }}:{{ gitlab_gitaly_instance_port }}' },
+}
 {% endif %}
 
 # LDAP
