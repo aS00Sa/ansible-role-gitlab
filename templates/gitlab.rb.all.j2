@@ -1,7 +1,123 @@
-# The URL through which GitLab will be accessed.
+## Public URL (users access this; при TLS на HAProxy/Traefik — https, nginx узла часто только HTTP)
 external_url "{{ gitlab_external_url }}"
 
-# gitlab.yml configuration
+## GitLab bundled NGINX on GitLab node
+{% if gitlab_nginx_listen_addresses is defined and gitlab_nginx_listen_addresses | length > 0 %}
+nginx['listen_addresses'] = {{ gitlab_nginx_listen_addresses | to_json }}
+{% endif %}
+{% if gitlab_nginx_listen_port is defined %}
+nginx['listen_port'] = {{ gitlab_nginx_listen_port | int }}
+{% endif %}
+{% if gitlab_nginx_listen_https is defined %}
+nginx['listen_https'] = {{ gitlab_nginx_listen_https | lower }}
+{% endif %}
+{% if gitlab_nginx_listen_http is defined %}
+nginx['listen_http'] = {{ gitlab_nginx_listen_http | lower }}
+{% endif %}
+
+{% if gitlab_reverse_proxy_ssl_termination | default(false) | bool %}
+# TLS terminates on reverse proxy (HAProxy/Traefik). Omnibus must not load local certs for nginx/registry.
+# https://docs.gitlab.com/omnibus/settings/ssl/#configure-a-reverse-proxy-or-load-balancer-ssl-termination
+{% endif %}
+letsencrypt['enable'] = {{ gitlab_letsencrypt_enable | lower }}
+{% if gitlab_letsencrypt_enable | bool %}
+letsencrypt['contact_emails'] = {{ gitlab_letsencrypt_contact_emails | to_json }}
+letsencrypt['auto_renew_hour'] = "{{ gitlab_letsencrypt_auto_renew_hour }}"
+letsencrypt['auto_renew_minute'] = "{{ gitlab_letsencrypt_auto_renew_minute }}"
+letsencrypt['auto_renew_day_of_month'] = "{{ gitlab_letsencrypt_auto_renew_day_of_month }}"
+letsencrypt['auto_renew'] = {{ gitlab_letsencrypt_auto_renew | lower }}
+{% endif %}
+nginx['redirect_http_to_https'] = {{ (gitlab_nginx_redirect_http_to_https | default(gitlab_redirect_http_to_https)) | lower }}
+{% if gitlab_registry_nginx_http_only | default(true) | bool %}
+{% if not (gitlab_registry_nginx_ssl_certificate is defined and gitlab_registry_nginx_ssl_certificate_key is defined) %}
+registry_nginx['listen_https'] = false
+registry_nginx['redirect_http_to_https'] = false
+{% endif %}
+{% endif %}
+
+{# ssl_certificate в gitlab.rb только при TLS на самом Omnibus-nginx (PKI / самоподпись / явный флаг). #}
+{% if (gitlab_deploy_pki_tls | default(false) | bool) or (gitlab_create_self_signed_cert | default(false) | bool) or (gitlab_nginx_tls_enabled | default(false) | bool) %}
+{% if gitlab_ssl_certificate is defined and gitlab_ssl_certificate_key is defined %}
+nginx['ssl_certificate'] = "{{ gitlab_ssl_certificate }}"
+nginx['ssl_certificate_key'] = "{{ gitlab_ssl_certificate_key }}"
+{% endif %}
+{% endif %}
+
+### GitLab Shell settings for GitLab
+gitlab_rails['gitlab_shell_ssh_port'] = {{ gitlab_gitlab_shell_ssh_port | int }}
+gitlab_rails['gitlab_shell_git_timeout'] = {{ gitlab_gitlab_shell_git_timeout | int }}
+
+## Trust reverse proxies (NGINX real_ip)
+{% if gitlab_nginx_real_ip_trusted_addresses is defined and gitlab_nginx_real_ip_trusted_addresses | length > 0 %}
+{% if gitlab_nginx_real_ip_header is defined %}
+nginx['real_ip_header'] = "{{ gitlab_nginx_real_ip_header }}"
+{% endif %}
+{% if gitlab_nginx_real_ip_recursive is defined %}
+nginx['real_ip_recursive'] = "{{ gitlab_nginx_real_ip_recursive }}"
+{% endif %}
+nginx['real_ip_trusted_addresses'] = {{ gitlab_nginx_real_ip_trusted_addresses | to_json }}
+{% endif %}
+
+## Rails-level trust for proxy chain
+{% if gitlab_trusted_proxies is defined %}
+gitlab_rails['trusted_proxies'] = {{ gitlab_trusted_proxies | to_json }}
+{% endif %}
+
+## Registry (same public host as GitLab when URLs совпадают)
+registry['enable'] = {{ gitlab_registry_enable | lower }}
+{% if gitlab_registry_enable | bool %}
+registry_external_url "{{ gitlab_registry_external_url }}"
+gitlab_rails['registry_enable'] = true
+gitlab_rails['registry_host'] = "{{ gitlab_registry_host }}"
+gitlab_rails['registry_path'] = "{{ gitlab_registry_path }}"
+{% if gitlab_registry_nginx_ssl_certificate is defined and gitlab_registry_nginx_ssl_certificate_key is defined %}
+registry_nginx['ssl_certificate'] = "{{ gitlab_registry_nginx_ssl_certificate }}"
+registry_nginx['ssl_certificate_key'] = "{{ gitlab_registry_nginx_ssl_certificate_key }}"
+{% endif %}
+{% endif %}
+
+## IMPORTANT:
+## Do NOT set custom nginx['proxy_set_headers'] here for reverse-proxy topologies unless you know the impact.
+
+{% if gitlab_ldap_servers_ruby | default('') | trim | length > 0 %}
+### LDAP Configuration (gitlab_ldap_servers_ruby) ###
+gitlab_rails['ldap_enabled'] = true
+{{ gitlab_ldap_servers_ruby }}
+{% elif gitlab_ldap_enabled | bool %}
+### LDAP Configuration (простой режим) ###
+gitlab_rails['ldap_enabled'] = true
+gitlab_rails['ldap_host'] = '{{ gitlab_ldap_host }}'
+gitlab_rails['ldap_port'] = {{ gitlab_ldap_port }}
+gitlab_rails['ldap_uid'] = '{{ gitlab_ldap_uid }}'
+gitlab_rails['ldap_method'] = '{{ gitlab_ldap_method }}' # 'ssl' or 'plain'
+gitlab_rails['ldap_bind_dn'] = '{{ gitlab_ldap_bind_dn }}'
+{% if gitlab_ldap_password is defined and gitlab_ldap_password | length > 0 %}
+gitlab_rails['ldap_password'] = '{{ gitlab_ldap_password }}'
+{% endif %}
+gitlab_rails['ldap_allow_username_or_email_login'] = true
+gitlab_rails['ldap_base'] = '{{ gitlab_ldap_base }}'
+{% endif %}
+
+{% if gitlab_omniauth_ruby | default('') | trim | length > 0 %}
+### OmniAuth (gitlab_omniauth_ruby) ###
+{{ gitlab_omniauth_ruby }}
+{% endif %}
+{% if gitlab_prevent_ldap_sign_in | default(false) | bool %}
+gitlab_rails['prevent_ldap_sign_in'] = true
+{% endif %}
+
+# Disable auto-ban/lock side effects on repeated bad credentials (browser/IDE stale passwords).
+# signup_enabled / 2FA — также начальные настройки БД при развёртывании.
+gitlab_rails['initial_application_settings'] = {
+  'signup_enabled' => {{ gitlab_signup_enabled | bool | ternary('true', 'false') }},
+  'require_two_factor_authentication' => {{ gitlab_2fa_mandatory | lower }},
+  'two_factor_grace_period' => {{ gitlab_2fa_grace_period_hours | int }},
+  'failed_authentication_ban_for_git_and_api_enabled' => false,
+  'max_login_attempts' => 99999,
+  'failed_login_attempts_unlock_period_in_minutes' => 1
+}
+
+# gitlab.yml / Rails
 gitlab_rails['gitlab_default_theme'] = "{{ gitlab_default_theme }}"
 gitlab_rails['time_zone'] = "{{ gitlab_time_zone }}"
 gitlab_rails['backup_keep_time'] = {{ gitlab_backup_keep_time }}
@@ -14,21 +130,8 @@ gitlab_rails['gitlab_email_display_name'] = "{{ gitlab_email_display_name }}"
 gitlab_rails['gitlab_email_reply_to'] = "{{ gitlab_email_reply_to }}"
 {% endif %}
 
-# Открытая регистрация новых пользователей (Sign up). По умолчанию false в defaults (Ansible: gitlab_signup_enabled).
 gitlab_rails['gitlab_signup_enabled'] = {{ gitlab_signup_enabled | bool | ternary('true', 'false') }}
 
-# Disable auto-ban/lock side effects on repeated bad credentials (browser/IDE stale passwords).
-# signup_enabled / 2FA — дубликаты для начальных настроек БД при развёртывании (см. также gitlab_rails ниже).
-gitlab_rails['initial_application_settings'] = {
-  'signup_enabled' => {{ gitlab_signup_enabled | bool | ternary('true', 'false') }},
-  'require_two_factor_authentication' => {{ gitlab_2fa_mandatory | lower }},
-  'two_factor_grace_period' => {{ gitlab_2fa_grace_period_hours | int }},
-  'failed_authentication_ban_for_git_and_api_enabled' => false,
-  'max_login_attempts' => 99999,
-  'failed_login_attempts_unlock_period_in_minutes' => 1
-}
-
-# Двухфакторная аутентификация: gitlab_2fa_mandatory + gitlab_2fa_grace_period_hours (0 = без отсрочки, сразу обязательна 2FA).
 gitlab_rails['otp_mandatory_for_users'] = {{ gitlab_2fa_mandatory | lower }}
 gitlab_rails['two_factor_grace_period'] = {{ gitlab_2fa_grace_period_hours | int }}
 
@@ -37,44 +140,8 @@ gitlab_rails['monitoring_whitelist'] = {{ gitlab_monitoring_whitelist | to_json 
 {% elif gitlab_ip_range is defined and gitlab_ip_range | length > 0 %}
 gitlab_rails['monitoring_whitelist'] = ["{{ gitlab_ip_range }}"]
 {% endif %}
-{% if gitlab_trusted_proxies is defined %}
-gitlab_rails['trusted_proxies'] = {{ gitlab_trusted_proxies | to_json }}
-{% endif %}
 
-# GitLab Nginx
-## See https://gitlab.com/gitlab-org/omnibus-gitlab/blob/master/doc/settings/nginx.md
-{% if gitlab_nginx_listen_port is defined %}
-nginx['listen_port'] = "{{ gitlab_nginx_listen_port }}"
-{% endif %}
-{% if gitlab_nginx_listen_https is defined %}
-nginx['listen_https'] = {{ gitlab_nginx_listen_https | lower }}
-{% endif %}
-nginx['redirect_http_to_https'] = {{ (gitlab_nginx_redirect_http_to_https | default(gitlab_redirect_http_to_https)) | lower }}
-{% if gitlab_ssl_certificate is defined and gitlab_ssl_certificate_key is defined %}
-nginx['ssl_certificate'] = "{{ gitlab_ssl_certificate }}"
-nginx['ssl_certificate_key'] = "{{ gitlab_ssl_certificate_key }}"
-{% endif %}
-
-{% if gitlab_nginx_real_ip_trusted_addresses is defined and gitlab_nginx_real_ip_trusted_addresses | length > 0 %}
-nginx['real_ip_trusted_addresses'] = {{ gitlab_nginx_real_ip_trusted_addresses | to_json }}
-{% if gitlab_nginx_real_ip_header is defined %}
-nginx['real_ip_header'] = "{{ gitlab_nginx_real_ip_header }}"
-{% endif %}
-{% if gitlab_nginx_real_ip_recursive is defined %}
-nginx['real_ip_recursive'] = "{{ gitlab_nginx_real_ip_recursive }}"
-{% endif %}
-{% endif %}
-
-letsencrypt['enable'] = {{ gitlab_letsencrypt_enable | lower }}
-{% if gitlab_letsencrypt_enable %}
-letsencrypt['contact_emails'] = {{ gitlab_letsencrypt_contact_emails | to_json }}
-letsencrypt['auto_renew_hour'] = "{{ gitlab_letsencrypt_auto_renew_hour }}"
-letsencrypt['auto_renew_minute'] = "{{ gitlab_letsencrypt_auto_renew_minute }}"
-letsencrypt['auto_renew_day_of_month'] = "{{ gitlab_letsencrypt_auto_renew_day_of_month }}"
-letsencrypt['auto_renew'] = {{ gitlab_letsencrypt_auto_renew | lower }}
-{% endif %}
-
-# External Redis (hifis.toolkit / Omnibus); internal Redis when gitlab_use_internal_redis is true.
+# External Redis (Omnibus internal Redis when gitlab_use_internal_redis is true).
 {% if not (gitlab_use_internal_redis | default(true) | bool) %}
 redis['enable'] = false
 gitlab_rails['redis_password'] = "{{ gitlab_redis_password }}"
@@ -90,7 +157,7 @@ gitlab_rails['redis_sentinels_password'] = "{{ gitlab_redis_sentinel_password }}
 {% endif %}
 {% endif %}
 
-# Git data / Gitaly (GitLab 18+: git_data_dirs удалён — см. Omnibus «Migrating from git_data_dirs»).
+# Git data / Gitaly (GitLab 18+: без git_data_dirs)
 {% if gitlab_use_internal_gitaly | default(true) | bool %}
 gitaly['configuration'] = {
   storage: [
@@ -107,21 +174,6 @@ gitlab_shell['secret_token'] = "{{ gitlab_secret_token }}"
 gitlab_rails['repositories_storages'] = {
   'default' => { 'gitaly_address' => 'tcp://{{ gitlab_gitaly_instance_ip }}:{{ gitlab_gitaly_instance_port }}' },
 }
-{% endif %}
-
-# LDAP
-gitlab_rails['ldap_enabled'] = {{ gitlab_ldap_enabled | lower }}
-{% if gitlab_ldap_enabled | bool %}
-gitlab_rails['ldap_host'] = '{{ gitlab_ldap_host }}'
-gitlab_rails['ldap_port'] = {{ gitlab_ldap_port }}
-gitlab_rails['ldap_uid'] = '{{ gitlab_ldap_uid }}'
-gitlab_rails['ldap_method'] = '{{ gitlab_ldap_method }}' # 'ssl' or 'plain'
-gitlab_rails['ldap_bind_dn'] = '{{ gitlab_ldap_bind_dn }}'
-{% if gitlab_ldap_password is defined and gitlab_ldap_password | length > 0 %}
-gitlab_rails['ldap_password'] = '{{ gitlab_ldap_password }}'
-{% endif %}
-gitlab_rails['ldap_allow_username_or_email_login'] = true
-gitlab_rails['ldap_base'] = '{{ gitlab_ldap_base }}'
 {% endif %}
 
 # SMTP
@@ -154,17 +206,7 @@ nginx['ssl_verify_client'] = "{{ gitlab_nginx_ssl_verify_client }}"
 nginx['ssl_client_certificate'] = "{{ gitlab_nginx_ssl_client_certificate }}"
 {% endif %}
 
-# GitLab registry.
-registry['enable'] = {{ gitlab_registry_enable | lower }}
-{% if gitlab_registry_enable | bool %}
-registry_external_url "{{ gitlab_registry_external_url }}"
-{% if gitlab_registry_nginx_ssl_certificate is defined and gitlab_registry_nginx_ssl_certificate_key is defined %}
-registry_nginx['ssl_certificate'] = "{{ gitlab_registry_nginx_ssl_certificate }}"
-registry_nginx['ssl_certificate_key'] = "{{ gitlab_registry_nginx_ssl_certificate_key }}"
-{% endif %}
-{% endif %}
-
-# External PostgreSQL (hifis.toolkit style).
+# External PostgreSQL
 {% if not (gitlab_use_internal_postgresql | default(true) | bool) %}
 postgresql['enable'] = false
 gitlab_rails['db_adapter'] = 'postgresql'
@@ -173,17 +215,6 @@ gitlab_rails['db_host'] = "{{ gitlab_postgresql_db_host }}"
 gitlab_rails['db_password'] = "{{ gitlab_postgresql_db_password }}"
 {% endif %}
 
-{#
-gitlab_additional_configurations (hifis.toolkit naming), same shape as gitlab_extra_settings:
-  gitlab_additional_configurations:
-    - gitlab_rails:
-        - key: "time_zone"
-          value: "Europe/Berlin"
-    - nginx:
-        - key: "listen_https"
-          type: "plain"
-          value: "false"
-#}
 {% if gitlab_additional_configurations is defined %}
 {% for configurations in gitlab_additional_configurations %}
 {% for config in configurations %}
@@ -199,7 +230,6 @@ gitlab_additional_configurations (hifis.toolkit naming), same shape as gitlab_ex
 {% endif %}
 
 {% if gitlab_extra_settings is defined %}
-# Extra configuration (role variable gitlab_extra_settings)
 {% for extra in gitlab_extra_settings %}
 {% for setting in extra %}
 {% for kv in extra[setting] %}
@@ -210,21 +240,18 @@ gitlab_additional_configurations (hifis.toolkit naming), same shape as gitlab_ex
 {% endif %}
 {% endfor %}
 {% endfor %}
-
 {% endfor %}
 {% endif %}
 
-{#
-gitlab_ruby_configuration_calls (hifis.toolkit): top-level Ruby calls, e.g. external_url-style:
-  gitlab_ruby_configuration_calls:
-    - key: "pages_external_url"
-      value: "https://pages.example.com"
-#}
 {% if gitlab_ruby_configuration_calls is defined %}
 {% for kvpair in gitlab_ruby_configuration_calls %}
 {{ kvpair.key }} "{{ kvpair.value }}"
 {% endfor %}
 {% endif %}
 
-# To change other settings, see:
+{% if gitlab_gitlab_rb_extra | default('') | trim | length > 0 %}
+# --- gitlab_gitlab_rb_extra ---
+{{ gitlab_gitlab_rb_extra }}
+{% endif %}
+
 # https://gitlab.com/gitlab-org/omnibus-gitlab/blob/master/README.md#changing-gitlab-yml-settings

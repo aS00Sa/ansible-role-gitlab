@@ -14,7 +14,8 @@ gitlab_ci_deploy_password_update: false
 # General config.
 gitlab_domain: gitlab.localdomain
 gitlab_ext_port: 8443
-gitlab_external_url: "https://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
+# По умолчанию HTTP на порту gitlab_ext_port (8443). Для HTTPS задайте https:// и включите TLS (см. блок SSL).
+gitlab_external_url: "http://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
 gitlab_git_data_dir: "/var/opt/gitlab/git-data"
 gitlab_edition: "gitlab-ce"
 # Пустая строка — ставится последняя версия из репозитория GitLab (рекомендуется).
@@ -33,14 +34,64 @@ gitlab_letsencrypt_auto_renew_minute: 30
 gitlab_letsencrypt_auto_renew_day_of_month: "*/7"
 gitlab_letsencrypt_auto_renew: true
 
-# SSL Configuration.
+# SSL / TLS (по умолчанию выключено: GitLab по HTTP, nginx без ssl_certificate в gitlab.rb).
+# PEM можно держать в репозитории в files/pki/ — роль их не копирует на сервер, пока gitlab_deploy_pki_tls: false.
 gitlab_redirect_http_to_https: false
 # Дублирует смысл nginx['redirect_http_to_https']; если не задано, в шаблоне берётся gitlab_redirect_http_to_https.
 #gitlab_nginx_redirect_http_to_https: false
-#gitlab_ssl_certificate: "/etc/gitlab/ssl/{{ gitlab_domain }}.crt"
-#gitlab_ssl_certificate_key: "/etc/gitlab/ssl/{{ gitlab_domain }}.key"
+# Пути на целевой ВМ (после включения PKI или самоподписи). Без TLS в gitlab.rb не попадают.
+gitlab_ssl_certificate: "/etc/gitlab/ssl/{{ gitlab_domain }}.crt"
+gitlab_ssl_certificate_key: "/etc/gitlab/ssl/{{ gitlab_domain }}.key"
+# Явно включить строки ssl_certificate в gitlab.rb, если сертификаты уже лежат на ВМ вручную (без задач роли).
+gitlab_nginx_tls_enabled: false
+#
+# Режим A — PKI из каталога на контроллере (leaf + intermediate в nginx, без root-ca на хосте):
+#   gitlab_external_url: "https://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
+#   gitlab_deploy_pki_tls: true
+#   gitlab_create_self_signed_cert: false
+#   gitlab_pki_source_dir: "{{ playbook_dir }}/files/pki"
+# Режим B — самоподпись на ВМ:
+#   gitlab_external_url: "https://..."
+#   gitlab_create_self_signed_cert: true
+#   gitlab_deploy_pki_tls: false
+gitlab_create_self_signed_cert: false
+gitlab_self_signed_cert_subj: "/O=GitLab Ansible/CN={{ gitlab_domain }}"
+#
+gitlab_deploy_pki_tls: false
+# Обычно "{{ playbook_dir }}/files/pki" (в репозитории уже лежат PEM; по умолчанию роль их не использует).
+gitlab_pki_source_dir: ""
+gitlab_pki_leaf_crt: localdomain.crt
+gitlab_pki_intermediate_crt: intermediate-ca.crt
+gitlab_pki_leaf_key: localdomain.key
+# Не используем ca-chain.localdomain.crt / localdomain.chain.crt в nginx bundle: там часто есть root; для клиентов достаточно leaf + intermediate-ca.crt.
+# intermediate-ca.key и root-ca.* на сервер GitLab не копируются (ключ ЦС не должен лежать на приложении).
+#
 gitlab_nginx_listen_port: "{{ gitlab_ext_port }}"
 gitlab_nginx_listen_https: false
+# Как в templates/gitlab.btnxlocal.ru.rb: явный HTTP listener; адреса — если пусто, слушает все интерфейсы.
+gitlab_nginx_listen_http: true
+gitlab_nginx_listen_addresses: []
+# TLS на HAProxy/Traefik: public URL https, nginx узла без локальных PEM (см. gitlab.rb.all.j2).
+gitlab_reverse_proxy_ssl_termination: false
+
+# GitLab Shell (SSH Git)
+gitlab_gitlab_shell_ssh_port: 22
+gitlab_gitlab_shell_git_timeout: 10800
+
+# Registry (gitlab_rails + registry_external_url), путь данных как в btnxlocal
+gitlab_registry_host: "{{ gitlab_domain }}"
+gitlab_registry_path: "/var/opt/gitlab/gitlab-rails/shared/registry"
+# Не заставлять registry_nginx ждать TLS на узле, если нет registry PEM (типично при TLS на прокси).
+gitlab_registry_nginx_http_only: true
+
+# LDAP в формате gitlab.rb как в btnx: многострочный Ruby в gitlab_ldap_servers_ruby (иначе — простой режим gitlab_ldap_*).
+gitlab_ldap_servers_ruby: ""
+# OmniAuth (Keycloak и т.д.): полный блок Ruby, например gitlab_rails['omniauth_enabled'] = true и gitlab_rails['omniauth_providers'] = [...]
+gitlab_omniauth_ruby: ""
+gitlab_prevent_ldap_sign_in: false
+
+# Произвольный хвост gitlab.rb (редко нужен, если не хватает gitlab_extra_settings).
+gitlab_gitlab_rb_extra: ""
 
 # --- hifis.toolkit-style Omnibus toggles (см. templates/gitlab.rb.j2) ---
 gitlab_use_internal_redis: true
@@ -69,10 +120,7 @@ gitlab_postgresql_db_password: "changeme"
 # Вызовы верхнего уровня в gitlab.rb (как в hifis.toolkit gitlab_ruby_configuration_calls).
 #gitlab_ruby_configuration_calls: []
 
-# SSL Self-signed Certificate Configuration.
-# false — Omnibus не создаёт самоподписанный сертификат (типично при TLS на reverse-proxy / внешнем LB).
-gitlab_create_self_signed_cert: false
-#gitlab_self_signed_cert_subj: "/C=US/ST=Missouri/L=Saint Louis/O=IT/CN={{ gitlab_domain }}"
+# Самоподписанный сертификат и пути PEM — см. блок «SSL Configuration» выше (gitlab_create_self_signed_cert, gitlab_ssl_certificate*).
 
 # LDAP Configuration (при gitlab_ldap_enabled: true задайте host/base и остальное под ваш каталог).
 gitlab_ldap_enabled: false
@@ -141,8 +189,8 @@ gitlab_nginx_ssl_verify_client: ""
 gitlab_nginx_ssl_client_certificate: ""
 
 # Registry configuration.
-# Можно совпадать с gitlab_external_url (тот же хост и порт): тогда Git/HTTPS и Docker
-# registry идут на один адрес; Omnibus-Nginx маршрутизирует /v2/ на registry.
+# Можно совпадать с gitlab_external_url (тот же хост и порт): тогда Git и Docker registry
+# идут на один адрес; Omnibus-Nginx маршрутизирует /v2/ на registry.
 # Переопределите только gitlab_registry_external_url, если registry на другом хосте/порту.
 gitlab_registry_enable: true
 # gitlab_registry_ext_port: 5050
