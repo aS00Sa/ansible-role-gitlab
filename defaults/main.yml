@@ -4,6 +4,13 @@ gitlab_enforce_system_locale: true
 gitlab_system_locale: ru_RU.UTF-8
 gitlab_system_timezone: Europe/Moscow
 
+# Системный пользователь на ВМ для автоматического деплоя (SSH, ansible-playbook, runner и т.п.).
+# Задайте свой пароль через vault / -e; при смене пароля: gitlab_ci_deploy_password_update: true (один прогон).
+gitlab_ci_deploy_user_enabled: true
+gitlab_ci_deploy_username: gitlab-ci
+gitlab_ci_deploy_password: "CHANGE_ME"
+gitlab_ci_deploy_password_update: false
+
 # General config.
 gitlab_domain: gitlab.localdomain
 gitlab_ext_port: 8443
@@ -16,7 +23,7 @@ gitlab_edition: "gitlab-ce"
 # (не "18.9.1" — такого пакета в apt нет). Для RHEL суффикс другой, см. документацию GitLab.
 gitlab_version: ""
 gitlab_backup_path: "/var/opt/gitlab/backups"
-gitlab_config_template: "gitlab.rb.j2"
+gitlab_config_template: "gitlab.rb.all.j2"
 
 # LetsEncrypt configuration.
 gitlab_letsencrypt_enable: false
@@ -109,14 +116,18 @@ gitlab_backup_keep_time: "604800"
 gitlab_download_validate_certs: true
 gitlab_default_theme: "2"
 
-# Sign-up / registration settings.
-# WARNING: For public instances, it's recommended to disable open registration.
+# Открытая регистрация (Sign up) на странице входа. По умолчанию выключена.
+# Включить только осознанно (например тестовый стенд): gitlab_signup_enabled: true
 gitlab_signup_enabled: false
 
-# Two-factor authentication (2FA) policy.
-# If true, all users will be required to enable 2FA within a grace period.
+# Web IDE (VS Code в браузере): в Omnibus отключается фичефлагом :vscode_web_ide (gitlab-rails runner), не gitlab.rb.
+# Включить снова: gitlab_web_ide_enabled: true. Не вызывать runner: gitlab_web_ide_configure_feature_flag: false.
+gitlab_web_ide_enabled: false
+gitlab_web_ide_configure_feature_flag: true
+
+# Two-factor authentication (2FA): жёсткая политика по умолчанию — всем нужна 2FA, без льготного периода.
 gitlab_2fa_mandatory: true
-# Grace period in hours users have to enable 2FA after sign-in.
+# Часы до обязательного включения 2FA после входа; 0 — отсрочки нет (сразу требуется настроить 2FA).
 gitlab_2fa_grace_period_hours: 0
 
 # Email configuration (поля нужны, если gitlab_email_enabled: true).

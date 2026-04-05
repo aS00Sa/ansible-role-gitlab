@@ -14,20 +14,23 @@ gitlab_rails['gitlab_email_display_name'] = "{{ gitlab_email_display_name }}"
 gitlab_rails['gitlab_email_reply_to'] = "{{ gitlab_email_reply_to }}"
 {% endif %}
 
-# Whether to allow open registration (Sign-up).
-gitlab_rails['gitlab_signup_enabled'] = {{ gitlab_signup_enabled | lower }}
+# Открытая регистрация новых пользователей (Sign up). По умолчанию false в defaults (Ansible: gitlab_signup_enabled).
+gitlab_rails['gitlab_signup_enabled'] = {{ gitlab_signup_enabled | bool | ternary('true', 'false') }}
 
 # Disable auto-ban/lock side effects on repeated bad credentials (browser/IDE stale passwords).
-# These are GitLab application settings applied during reconfigure.
+# signup_enabled / 2FA — дубликаты для начальных настроек БД при развёртывании (см. также gitlab_rails ниже).
 gitlab_rails['initial_application_settings'] = {
+  'signup_enabled' => {{ gitlab_signup_enabled | bool | ternary('true', 'false') }},
+  'require_two_factor_authentication' => {{ gitlab_2fa_mandatory | lower }},
+  'two_factor_grace_period' => {{ gitlab_2fa_grace_period_hours | int }},
   'failed_authentication_ban_for_git_and_api_enabled' => false,
   'max_login_attempts' => 99999,
   'failed_login_attempts_unlock_period_in_minutes' => 1
 }
 
-# Two-factor authentication (2FA) policy.
+# Двухфакторная аутентификация: gitlab_2fa_mandatory + gitlab_2fa_grace_period_hours (0 = без отсрочки, сразу обязательна 2FA).
 gitlab_rails['otp_mandatory_for_users'] = {{ gitlab_2fa_mandatory | lower }}
-gitlab_rails['two_factor_grace_period'] = {{ gitlab_2fa_grace_period_hours }}
+gitlab_rails['two_factor_grace_period'] = {{ gitlab_2fa_grace_period_hours | int }}
 
 {% if gitlab_monitoring_whitelist is defined and gitlab_monitoring_whitelist | length > 0 %}
 gitlab_rails['monitoring_whitelist'] = {{ gitlab_monitoring_whitelist | to_json }}

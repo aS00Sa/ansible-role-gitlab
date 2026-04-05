@@ -26,6 +26,10 @@
     state: present
   when: ansible_os_family == 'Debian'
 
+- name: Create CI deploy system user (gitlab-ci)
+  ansible.builtin.include_tasks: ci_deploy_user.yml
+  when: gitlab_ci_deploy_user_enabled | default(true) | bool
+
 - name: Download GitLab repository installation script.
   get_url:
     url: "{{ gitlab_repository_installation_script_url }}"
@@ -103,3 +107,9 @@
     end"
   register: gitlab_anti_lockout_settings
   changed_when: "'Updated GitLab anti-lockout settings:' in gitlab_anti_lockout_settings.stdout"
+
+- name: Configure Web IDE feature flag (:vscode_web_ide)
+  ansible.builtin.include_tasks: web_ide.yml
+  when:
+    - gitlab_web_ide_configure_feature_flag | default(true) | bool
+    - gitlab_file.stat.exists | bool

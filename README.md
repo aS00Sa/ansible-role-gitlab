@@ -39,6 +39,8 @@ Available variables are listed below, along with default values (see `defaults/m
 
 The domain and URL at which the GitLab instance will be accessible. This is set as the `external_url` configuration setting in `gitlab.rb`, and if you want to run GitLab on a different port (besides 80/443), you can specify the port here (e.g. `https://gitlab:8443/` for port 8443).
 
+**CI / автодеплой (Linux на ВМ):** роль создаёт системного пользователя `gitlab-ci` с паролем из `gitlab_ci_deploy_password` (по умолчанию `CHANGE_ME` — смените через Ansible Vault или `-e`). Пароль обновляется только при создании пользователя; чтобы принудительно обновить: `gitlab_ci_deploy_password_update: true`. Отключить создание пользователя: `gitlab_ci_deploy_user_enabled: false`.
+
     gitlab_git_data_dir: "/var/opt/gitlab/git-data"
 
 The `gitlab_git_data_dir` is the location where all the Git repositories will be stored. You can use a shared drive or any path on the system.
@@ -67,7 +69,7 @@ The edition of GitLab to install. Usually either `gitlab-ce` (Community Edition)
 
 If you'd like to install a specific version, set the version here (e.g. `11.4.0-ce.0` for Debian/Ubuntu, or `11.4.0-ce.0.el7` for RedHat/CentOS).
 
-    gitlab_config_template: "gitlab.rb.j2"
+    gitlab_config_template: "gitlab.rb.all.j2"
 
 The `gitlab.rb.j2` template packaged with this role is meant to be very generic and serve a variety of use cases. However, many people would like to have a much more customized version, and so you can override this role's default template with your own, adding any additional customizations you need. To do this:
 

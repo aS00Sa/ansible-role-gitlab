@@ -1,0 +1,25 @@
+---
+# VS Code Web IDE управляется фичефлагом :vscode_web_ide (не ключом gitlab.rb).
+# См. https://docs.gitlab.com/ee/administration/feature_flags.html
+- name: Query whether Web IDE feature flag (:vscode_web_ide) is disabled
+  command: >
+    gitlab-rails runner
+    "print Feature.disabled?(:vscode_web_ide)"
+  register: gitlab_web_ide_flag_disabled
+  changed_when: false
+
+- name: Disable Web IDE (Feature.disable :vscode_web_ide)
+  command: >
+    gitlab-rails runner
+    "Feature.disable(:vscode_web_ide)"
+  when:
+    - not gitlab_web_ide_enabled | bool
+    - gitlab_web_ide_flag_disabled.stdout | trim == "false"
+
+- name: Enable Web IDE (Feature.enable :vscode_web_ide)
+  command: >
+    gitlab-rails runner
+    "Feature.enable(:vscode_web_ide)"
+  when:
+    - gitlab_web_ide_enabled | bool
+    - gitlab_web_ide_flag_disabled.stdout | trim == "true"
