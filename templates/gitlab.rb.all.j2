@@ -30,13 +30,20 @@ letsencrypt['auto_renew'] = {{ gitlab_letsencrypt_auto_renew | lower }}
 nginx['redirect_http_to_https'] = {{ (gitlab_nginx_redirect_http_to_https | default(gitlab_redirect_http_to_https)) | lower }}
 {% if gitlab_registry_nginx_http_only | default(true) | bool %}
 {% if not (gitlab_registry_nginx_ssl_certificate is defined and gitlab_registry_nginx_ssl_certificate_key is defined) %}
+{# Omnibus: при https registry_external_url без TLS на узле нужен явный HTTP-порт registry-nginx (см. docs SSL / reverse proxy). #}
+{% set _gitlab_registry_listen_port_trim = gitlab_registry_nginx_listen_port | default('') | string | trim %}
+{% if _gitlab_registry_listen_port_trim | length > 0 %}
+registry_nginx['listen_port'] = {{ gitlab_registry_nginx_listen_port | int }}
+{% else %}
+registry_nginx['listen_port'] = {{ gitlab_nginx_listen_port | int }}
+{% endif %}
 registry_nginx['listen_https'] = false
 registry_nginx['redirect_http_to_https'] = false
 {% endif %}
 {% endif %}
 
-{# ssl_certificate в gitlab.rb только при TLS на самом Omnibus-nginx (PKI / самоподпись / явный флаг). #}
-{% if (gitlab_deploy_pki_tls | default(false) | bool) or (gitlab_create_self_signed_cert | default(false) | bool) or (gitlab_nginx_tls_enabled | default(false) | bool) %}
+{# PEM на узле только вместе с listen_https=true; иначе Omnibus даёт listen ssl без ssl_certificate и nginx падает. #}
+{% if (gitlab_nginx_listen_https | default(false) | bool) and ((gitlab_deploy_pki_tls | default(false) | bool) or (gitlab_create_self_signed_cert | default(false) | bool) or (gitlab_nginx_tls_enabled | default(false) | bool)) %}
 {% if gitlab_ssl_certificate is defined and gitlab_ssl_certificate_key is defined %}
 nginx['ssl_certificate'] = "{{ gitlab_ssl_certificate }}"
 nginx['ssl_certificate_key'] = "{{ gitlab_ssl_certificate_key }}"

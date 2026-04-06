@@ -83,6 +83,8 @@ gitlab_registry_host: "{{ gitlab_domain }}"
 gitlab_registry_path: "/var/opt/gitlab/gitlab-rails/shared/registry"
 # Не заставлять registry_nginx ждать TLS на узле, если нет registry PEM (типично при TLS на прокси).
 gitlab_registry_nginx_http_only: true
+# Пусто — как у основного nginx (gitlab_nginx_listen_port).
+gitlab_registry_nginx_listen_port: ""
 
 # LDAP в формате gitlab.rb как в btnx: многострочный Ruby в gitlab_ldap_servers_ruby (иначе — простой режим gitlab_ldap_*).
 gitlab_ldap_servers_ruby: ""

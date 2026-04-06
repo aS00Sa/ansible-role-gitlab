@@ -1,6 +1,5 @@
 ---
-# По умолчанию роль не трогает group_vars: HTTP:8443, TLS выключен (см. defaults/main.yml).
-# Включить PKI из files/pki/:
-#   gitlab_external_url: "https://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
-#   gitlab_deploy_pki_tls: true
-#   gitlab_pki_source_dir: "{{ playbook_dir }}/files/pki"
+# HTTP, порт 8443 (как в запросе: http://gitlab.localdomain:8443/)
+gitlab_ext_port: 8443
+gitlab_domain: gitlab.localdomain
+gitlab_external_url: "http://gitlab.localdomain:8443/"
