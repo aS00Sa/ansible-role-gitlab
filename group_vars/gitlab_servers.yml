@@ -1,5 +1,7 @@
 ---
-# HTTP, порт 8443 (как в запросе: http://gitlab.localdomain:8443/)
+# Публичный доступ к GitLab обычно через HAProxy или Traefik; Omnibus-nginx на ВМ слушает HTTP на gitlab_ext_port (как в templates/gitlab.btnxlocal.ru.rb).
+# gitlab_domain задаётся в inventory (или -e); в defaults роли он пустой. При TLS на прокси — https в external_url и gitlab_reverse_proxy_ssl_termination.
 gitlab_ext_port: 8443
-gitlab_domain: gitlab.localdomain
-gitlab_external_url: "http://gitlab.localdomain:8443/"
+gitlab_external_url: "http://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
+#
+# allowed_hosts собирает роль в tasks/allowed_hosts.yml (gitlab_domain, ansible_host из inventory).

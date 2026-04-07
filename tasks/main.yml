@@ -2,6 +2,14 @@
 - name: Include OS-specific variables.
   include_vars: "{{ ansible_os_family }}.yml"
 
+- name: Require gitlab_domain (задаётся вне роли — inventory, group_vars, -e)
+  ansible.builtin.assert:
+    that:
+      - gitlab_domain | default('', true) | string | trim | length > 0
+    fail_msg: >-
+      Укажите gitlab_domain (FQDN), например в inventory у хоста или в group_vars.
+      В defaults/main.yml значение пустое — без захардкоженного домена.
+
 - name: Enforce system locale (ru_RU.UTF-8) and timezone (Europe/Moscow)
   ansible.builtin.include_tasks: locale.yml
   when: gitlab_enforce_system_locale | default(true) | bool
@@ -131,6 +139,9 @@
   when:
     - gitlab_create_self_signed_cert | bool
     - not (gitlab_deploy_pki_tls | default(false) | bool)
+
+- name: Compute gitlab_rails allowed_hosts for gitlab.rb template
+  ansible.builtin.include_tasks: allowed_hosts.yml
 
 - name: Copy GitLab configuration file.
   template:

@@ -34,10 +34,10 @@ GitLab's default administrator account details are below; be sure to login immed
 
 Available variables are listed below, along with default values (see `defaults/main.yml`):
 
-    gitlab_domain: gitlab
-    gitlab_external_url: "https://{{ gitlab_domain }}/"
+    gitlab_domain: ""  # задайте в inventory / group_vars / -e (в роли без FQDN по умолчанию)
+    gitlab_external_url: "http://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
 
-The domain and URL at which the GitLab instance will be accessible. This is set as the `external_url` configuration setting in `gitlab.rb`, and if you want to run GitLab on a different port (besides 80/443), you can specify the port here (e.g. `https://gitlab:8443/` for port 8443).
+The FQDN (`gitlab_domain`) must be set outside the role (inventory host vars, `group_vars`, or `-e`). There is no hardcoded production hostname in `defaults/main.yml`. The URL is the Omnibus `external_url`; set `gitlab_ext_port` and switch to `https://` when using TLS on HAProxy/Traefik. For a non-default HTTP port, include it in the URL (e.g. port 8443 behind a reverse proxy).
 
 **CI / автодеплой (Linux на ВМ):** роль создаёт системного пользователя `gitlab-ci` с паролем из `gitlab_ci_deploy_password` (по умолчанию `CHANGE_ME` — смените через Ansible Vault или `-e`). Пароль обновляется только при создании пользователя; чтобы принудительно обновить: `gitlab_ci_deploy_password_update: true`. Отключить создание пользователя: `gitlab_ci_deploy_user_enabled: false`.
 

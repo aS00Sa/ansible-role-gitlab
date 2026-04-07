@@ -12,10 +12,21 @@ gitlab_ci_deploy_password: "CHANGE_ME"
 gitlab_ci_deploy_password_update: false
 
 # General config.
-gitlab_domain: gitlab.localdomain
+# FQDN GitLab — только из inventory / group_vars / -e (в роли намеренно без значения по умолчанию).
+gitlab_domain: ""
 gitlab_ext_port: 8443
-# По умолчанию HTTP на порту gitlab_ext_port (8443). Для HTTPS задайте https:// и включите TLS (см. блок SSL).
+# По умолчанию HTTP на порту gitlab_ext_port. Для HTTPS задайте https:// и TLS (см. блок SSL).
 gitlab_external_url: "http://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
+# При external_url http:// — в gitlab.rb выставляется session cookie без Secure (см. шаблон). Отключить: false.
+gitlab_session_store_insecure_cookie_for_http: true
+# allowed_hosts: см. tasks/allowed_hosts.yml — авто из gitlab_domain + ansible_host + суффикс, без литералов домена в YAML.
+gitlab_allowed_hosts_enabled: true
+gitlab_allowed_hosts_auto_merge: true
+# Дополнительные хосты к списку (опционально). Суффикс 127.0.0.1/localhost задаётся в gitlab_allowed_hosts_static_suffix.
+gitlab_allowed_hosts: []
+gitlab_allowed_hosts_static_suffix:
+  - 127.0.0.1
+  - localhost
 gitlab_git_data_dir: "/var/opt/gitlab/git-data"
 gitlab_edition: "gitlab-ce"
 # Пустая строка — ставится последняя версия из репозитория GitLab (рекомендуется).

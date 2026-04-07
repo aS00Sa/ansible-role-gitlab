@@ -1,6 +1,21 @@
 ## Public URL (users access this; при TLS на HAProxy/Traefik — https, nginx узла часто только HTTP)
 external_url "{{ gitlab_external_url }}"
 
+{% if gitlab_external_url | regex_search('^http://') %}
+# HTTP: иначе сессия может помечаться Secure после смены с HTTPS → браузер не шлёт cookie → CSRF → 422 при входе.
+{% if gitlab_session_store_insecure_cookie_for_http | default(true) | bool %}
+gitlab_rails['session_store'] = {
+  'cookie_store' => {
+    'secure' => false
+  }
+}
+{% endif %}
+{% endif %}
+{% if (_gitlab_rails_allowed_hosts | default([])) | length > 0 %}
+# Host в адресной строке — см. tasks/allowed_hosts.yml (gitlab_domain, ansible_host из inventory).
+gitlab_rails['allowed_hosts'] = {{ _gitlab_rails_allowed_hosts | to_json }}
+{% endif %}
+
 ## GitLab bundled NGINX on GitLab node
 {% if gitlab_nginx_listen_addresses is defined and gitlab_nginx_listen_addresses | length > 0 %}
 nginx['listen_addresses'] = {{ gitlab_nginx_listen_addresses | to_json }}

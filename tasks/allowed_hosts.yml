@@ -1,0 +1,28 @@
+---
+# gitlab_rails['allowed_hosts'] — только из переменных (inventory / extra vars), без литералов домена в YAML.
+- name: Build gitlab_rails allowed_hosts list (auto: gitlab_domain + ansible_host + суффикс + gitlab_allowed_hosts)
+  ansible.builtin.set_fact:
+    _gitlab_rails_allowed_hosts: >-
+      {{
+        (
+          ([gitlab_domain] if (gitlab_domain | default('', true) | string | trim | length > 0) else [])
+          + ([ansible_host] if (ansible_host | default('', true) | string | trim | length > 0) else [])
+          + (gitlab_allowed_hosts_static_suffix | default(['127.0.0.1', 'localhost']))
+          + (gitlab_allowed_hosts | default([]))
+        ) | unique | list
+      }}
+  when:
+    - gitlab_allowed_hosts_enabled | default(true) | bool
+    - gitlab_allowed_hosts_auto_merge | default(true) | bool
+
+- name: Build gitlab_rails allowed_hosts list (только ручной список gitlab_allowed_hosts)
+  ansible.builtin.set_fact:
+    _gitlab_rails_allowed_hosts: "{{ gitlab_allowed_hosts | default([]) }}"
+  when:
+    - gitlab_allowed_hosts_enabled | default(true) | bool
+    - not (gitlab_allowed_hosts_auto_merge | default(true) | bool)
+
+- name: Do not set allowed_hosts in gitlab.rb
+  ansible.builtin.set_fact:
+    _gitlab_rails_allowed_hosts: []
+  when: not (gitlab_allowed_hosts_enabled | default(true) | bool)
