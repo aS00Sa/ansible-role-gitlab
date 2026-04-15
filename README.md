@@ -20,14 +20,21 @@ GitLab's default administrator account details are below; be sure to login immed
    pip install -r requirements.txt
    # Дальше либо оставьте venv активным, либо вызывайте .venv/bin/ansible-playbook явно.
 
-   ssh-copy-id -i /mnt/c/Users/x-shu/.ssh/id_rsa.pub debian@gitlab
-   
-   ANSIBLE_STDOUT_CALLBACK=yaml ANSIBLE_CONFIG="$PWD/ansible.cfg" .venv/bin/ansible-playbook -i inventory.ini install.yml -u debian --private-key ~/.ssh/id_rsa 2>&1 | tee deploy-$(date +%Y%m%d-%H%M).log
+   # Ключ должен быть в authorized_keys пользователя из inventory (для inventory-localdomain.ini это debian).
+   ssh-copy-id -i /mnt/c/Users/x-shu/.ssh/id_ed25519.pub debian@192.168.1.71
+
+   # Деплой из каталога репозитория (Linux / WSL: путь к репозиторию — ваш).
+   set -o pipefail
+   ANSIBLE_STDOUT_CALLBACK=yaml ANSIBLE_CONFIG="$PWD/ansible.cfg" .venv/bin/ansible-playbook \
+     -i inventory-localdomain.ini --private-key "$HOME/.ssh/id_ed25519" install.yml -vvv 2>&1 | tee "install-$(date +%Y%m%d-%H%M).log"
+
+   # Если ключ лежит только в Windows, в WSL укажите его явно (замените USER):
+   # --private-key /mnt/c/Users/USER/.ssh/id_ed25519
 
    # Удаление пакета Omnibus (данные по умолчанию не трогаем):
-   # .venv/bin/ansible-playbook -i inventory.ini remove.yml -u debian --private-key ~/.ssh/id_rsa
+   # .venv/bin/ansible-playbook -i inventory-localdomain.ini --private-key ~/.ssh/id_ed25519 remove.yml
    # Полное стирание /etc/gitlab, /var/opt/gitlab и т.д.:
-   # .venv/bin/ansible-playbook -i inventory.ini remove.yml -e gitlab_remove_purge_data=true
+   # .venv/bin/ansible-playbook -i inventory-localdomain.ini --private-key ~/.ssh/id_ed25519 remove.yml -e gitlab_remove_purge_data=true
    ```
 
 ## Role Variables
