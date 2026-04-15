@@ -283,18 +283,21 @@ uri к external_url + /users/sign_in или -/health (в зависимости 
 Если включён cron бэкапов — файл-маркер или max age последнего .tar в backup_path.
 Не смешивать с «мониторингом кластера»: это минимальный sanity layer для одиночной ВМ.
 
-Организация в репозитории (предложение)
+Организация в репозитории (реализовано)
 tasks/self_service.yml — общий include_tasks, вызывается из main.yml когда gitlab_self_service_enabled.
-Подключать подмодули: self_service_backup.yml, self_service_logrotate.yml, self_service_cleanup.yml, self_service_cron_diagnostics.yml (или один файл с блоками).
-templates/ — logrotate, при необходимости wrapper-скрипт для бэкапа с flock и логированием.
-defaults/main.yml — все новые переменные с безопасными дефолтами (например удалённый бэкап выключен, глубокий gitlab:check выключен).
-Так вы сохраняете принцип «роль не зашивает домены» и не ломаете Molecule: в converge можно включить только нужный поднабор.
+Подключаемые подмодули:
+- tasks/self_service_backup.yml
+- tasks/self_service_logrotate.yml
+- tasks/self_service_cleanup.yml
+- tasks/self_service_diagnostics.yml
 
-Приоритеты внедрения
-Расписание бэкапов + проверка свежести — максимальный выигрыш в автономности.
-Logrotate (если после аудита на стенде видно раздувание /var/log/gitlab).
-Очистка tmp по возрасту + опционально registry GC.
-Лёгкий self-check после установки и по расписанию.
-Если нужно, следующим шагом могу вынести это в конкретные переменные и файлы задач в репозитории (с дефолтами «всё выключено» кроме минимально безопасного logrotate/бэкап-cron по желанию).
+Шаблоны:
+- templates/self-service-backup.sh.j2
+- templates/gitlab-self-service.logrotate.j2
+- templates/self-service-cleanup.sh.j2
+- templates/self-service-registry-gc.sh.j2
+- templates/self-service-diagnostics.sh.j2
+
+defaults/main.yml — все self-service переменные с безопасными дефолтами (по умолчанию всё выключено).
 
 

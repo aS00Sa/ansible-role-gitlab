@@ -181,6 +181,77 @@ gitlab_default_theme: "2"
 # Включить только осознанно (например тестовый стенд): gitlab_signup_enabled: true
 gitlab_signup_enabled: false
 
+# --- Self-service (all disabled by default) ---
+# Master switch for autonomous maintenance tasks.
+gitlab_self_service_enabled: false
+
+# Backups: create local backup archives on schedule (gitlab-backup create).
+gitlab_self_service_backup_enabled: false
+gitlab_self_service_backup_cron_minute: "20"
+gitlab_self_service_backup_cron_hour: "2"
+gitlab_self_service_backup_cron_day: "*"
+gitlab_self_service_backup_cron_month: "*"
+gitlab_self_service_backup_cron_weekday: "*"
+gitlab_self_service_backup_cron_user: root
+gitlab_self_service_backup_skip: []
+gitlab_self_service_backup_log_file: "/var/log/gitlab/self-service-backup.log"
+gitlab_self_service_backup_lock_file: "/var/lock/gitlab-self-service-backup.lock"
+
+# Log rotation for GitLab logs (extra safety layer over Omnibus defaults).
+gitlab_self_service_logrotate_enabled: false
+gitlab_self_service_logrotate_frequency: daily
+gitlab_self_service_logrotate_rotate: 14
+gitlab_self_service_logrotate_maxsize: "200M"
+gitlab_self_service_logrotate_compress: true
+gitlab_self_service_logrotate_delaycompress: true
+gitlab_self_service_logrotate_copytruncate: true
+
+# Cleanup old temporary files from known GitLab temp paths.
+gitlab_self_service_cleanup_enabled: false
+gitlab_self_service_cleanup_cron_minute: "40"
+gitlab_self_service_cleanup_cron_hour: "3"
+gitlab_self_service_cleanup_cron_day: "*"
+gitlab_self_service_cleanup_cron_month: "*"
+gitlab_self_service_cleanup_cron_weekday: "*"
+gitlab_self_service_cleanup_cron_user: root
+gitlab_self_service_cleanup_age_days: 7
+gitlab_self_service_cleanup_remove_empty_dirs: true
+gitlab_self_service_cleanup_log_file: "/var/log/gitlab/self-service-cleanup.log"
+gitlab_self_service_cleanup_lock_file: "/var/lock/gitlab-self-service-cleanup.lock"
+gitlab_self_service_cleanup_paths:
+  - "/var/opt/gitlab/gitlab-rails/shared/tmp"
+  - "/var/opt/gitlab/gitlab-rails/shared/cache"
+  - "/var/opt/gitlab/gitlab-rails/tmp"
+  - "/var/opt/gitlab/gitlab-workhorse"
+
+# Optional registry garbage-collection schedule.
+gitlab_self_service_registry_gc_enabled: false
+gitlab_self_service_registry_gc_cron_minute: "10"
+gitlab_self_service_registry_gc_cron_hour: "4"
+gitlab_self_service_registry_gc_cron_day: "*"
+gitlab_self_service_registry_gc_cron_month: "*"
+gitlab_self_service_registry_gc_cron_weekday: "0"
+gitlab_self_service_registry_gc_cron_user: root
+gitlab_self_service_registry_gc_log_file: "/var/log/gitlab/self-service-registry-gc.log"
+gitlab_self_service_registry_gc_lock_file: "/var/lock/gitlab-self-service-registry-gc.lock"
+
+# Baseline self-diagnostics schedule and thresholds.
+gitlab_self_service_diagnostics_enabled: false
+gitlab_self_service_diagnostics_cron_minute: "*/30"
+gitlab_self_service_diagnostics_cron_hour: "*"
+gitlab_self_service_diagnostics_cron_day: "*"
+gitlab_self_service_diagnostics_cron_month: "*"
+gitlab_self_service_diagnostics_cron_weekday: "*"
+gitlab_self_service_diagnostics_cron_user: root
+gitlab_self_service_diagnostics_deep_check: false
+gitlab_self_service_diagnostics_http_path: "/-/health"
+gitlab_self_service_diagnostics_http_timeout: 10
+gitlab_self_service_diagnostics_disk_used_warn_percent: 85
+gitlab_self_service_diagnostics_inode_used_warn_percent: 85
+gitlab_self_service_diagnostics_backup_max_age_hours: 30
+gitlab_self_service_diagnostics_log_file: "/var/log/gitlab/self-service-diagnostics.log"
+gitlab_self_service_diagnostics_lock_file: "/var/lock/gitlab-self-service-diagnostics.lock"
+
 # Web IDE (VS Code в браузере): в Omnibus отключается фичефлагом :vscode_web_ide (gitlab-rails runner), не gitlab.rb.
 # Включить снова: gitlab_web_ide_enabled: true. Не вызывать runner: gitlab_web_ide_configure_feature_flag: false.
 gitlab_web_ide_enabled: false

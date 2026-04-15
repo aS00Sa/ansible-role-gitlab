@@ -177,3 +177,7 @@
   when:
     - gitlab_web_ide_configure_feature_flag | default(true) | bool
     - gitlab_file.stat.exists | bool
+
+- name: Configure self-service mechanisms
+  ansible.builtin.include_tasks: self_service.yml
+  when: gitlab_self_service_enabled | default(false) | bool
