@@ -23,18 +23,24 @@ GitLab's default administrator account details are below; be sure to login immed
    # Ключ должен быть в authorized_keys пользователя из inventory (для inventory-localdomain.ini это debian).
    ssh-copy-id -i /mnt/c/Users/x-shu/.ssh/id_ed25519.pub debian@192.168.1.71
 
-   # Деплой из каталога репозитория (Linux / WSL: путь к репозиторию — ваш).
+   # Деплой из каталога репозитория (Linux / WSL). В install.yml уже задано become: true — подключаетесь как debian, модули идут с sudo на root.
+   # Неверно: install.yml >&1 -vvv (перенаправление до -vvv). Верно: сначала аргументы playbook, потом -vvv, потом 2>&1 | tee.
    set -o pipefail
    ANSIBLE_STDOUT_CALLBACK=yaml ANSIBLE_CONFIG="$PWD/ansible.cfg" .venv/bin/ansible-playbook \
-     -i inventory-localdomain.ini --private-key "$HOME/.ssh/id_ed25519" install.yml -vvv 2>&1 | tee "install-$(date +%Y%m%d-%H%M).log"
+     -i inventory-localdomain.ini -u debian -b --become-user root \
+     --private-key "$HOME/.ssh/id_ed25519" \
+     install.yml -vvv 2>&1 | tee "install-$(date +%Y%m%d-%H%M).log"
 
-   # Если ключ лежит только в Windows, в WSL укажите его явно (замените USER):
-   # --private-key /mnt/c/Users/USER/.ssh/id_ed25519
+   # Другой ключ (например RSA): замените путь в --private-key. Ключи на /mnt/c/... часто с правами 0777 — ssh их отклоняет; скопируйте в WSL и выставьте 600:
+   #   mkdir -p ~/.ssh && cp /mnt/c/Users/USER/.ssh/id_rsa ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
+   #   ... --private-key "$HOME/.ssh/id_rsa" ...
+
+   # Если не передаёте --private-key, можно задать в inventory: ansible_ssh_private_key_file=~/.ssh/id_ed25519
 
    # Удаление пакета Omnibus (данные по умолчанию не трогаем):
-   # .venv/bin/ansible-playbook -i inventory-localdomain.ini --private-key ~/.ssh/id_ed25519 remove.yml
+   # .venv/bin/ansible-playbook -i inventory-localdomain.ini -u debian -b --private-key ~/.ssh/id_ed25519 remove.yml
    # Полное стирание /etc/gitlab, /var/opt/gitlab и т.д.:
-   # .venv/bin/ansible-playbook -i inventory-localdomain.ini --private-key ~/.ssh/id_ed25519 remove.yml -e gitlab_remove_purge_data=true
+   # .venv/bin/ansible-playbook -i inventory-localdomain.ini -u debian -b --private-key ~/.ssh/id_ed25519 remove.yml -e gitlab_remove_purge_data=true
    ```
 
 ## Role Variables
