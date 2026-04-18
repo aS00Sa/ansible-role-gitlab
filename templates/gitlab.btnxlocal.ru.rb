@@ -1,18 +1,18 @@
 ## Public URL (users access this via HAProxy/Traefik)
 external_url 'https://gitlab.btnxlocal.ru'
 
-## GitLab bundled NGINX listens internally (HTTP only) on GitLab node
-nginx['listen_addresses'] = ['192.168.25.125', '127.0.0.1']
-nginx['listen_port'] = 8443
-nginx['listen_https'] = false
-nginx['listen_http']  = true
-
 # TLS terminates on reverse proxy (HAProxy/Traefik). Omnibus must not load local certs for nginx/registry.
 # See https://docs.gitlab.com/omnibus/settings/ssl/#configure-a-reverse-proxy-or-load-balancer-ssl-termination
 letsencrypt['enable'] = false
 nginx['redirect_http_to_https'] = false
 registry_nginx['listen_https'] = false
 registry_nginx['redirect_http_to_https'] = false
+
+## GitLab bundled NGINX listens internally (HTTP only) on GitLab node
+nginx['listen_addresses'] = ['176.214.178.139', '192.168.25.125', '127.0.0.1']
+nginx['listen_port'] = 8443
+nginx['listen_https'] = false
+nginx['listen_http']  = true
 
 ### GitLab Shell settings for GitLab
 gitlab_rails['gitlab_shell_ssh_port'] = 2222
@@ -42,6 +42,7 @@ gitlab_rails['registry_path'] = '/var/opt/gitlab/gitlab-rails/shared/registry'
 
 ## IMPORTANT:
 ## Do NOT set custom nginx['proxy_set_headers'] here for this topology.
+
 ### LDAP Configuration ###
 gitlab_rails['ldap_enabled'] = true
 gitlab_rails['ldap_servers'] = {
@@ -67,7 +68,7 @@ gitlab_rails['ldap_servers'] = {
     }
   }
 }
-#
+
 ### OmniAuth (Keycloak SSO) ###
 gitlab_rails['omniauth_enabled'] = true
 gitlab_rails['omniauth_allow_single_sign_on'] = ['openid_connect']
