@@ -1,0 +1,21 @@
+---
+# Системный пользователь для SSH / Ansible / внешнего CI (не пользователь GitLab в веб-интерфейсе).
+- name: Ensure CI deploy Linux user exists
+  ansible.builtin.user:
+    name: "{{ gitlab_ci_deploy_username }}"
+    shell: /bin/bash
+    create_home: true
+    state: present
+  register: gitlab_ci_deploy_user_result
+
+# chpasswd вместо password_hash на контроллере (не требует passlib в venv).
+- name: Set CI deploy user password
+  ansible.builtin.shell: printf '%s:%s\n' "$GITLAB_CI_USER" "$GITLAB_CI_PASS" | chpasswd
+  environment:
+    GITLAB_CI_USER: "{{ gitlab_ci_deploy_username }}"
+    GITLAB_CI_PASS: "{{ gitlab_ci_deploy_password }}"
+  no_log: true
+  when:
+    - gitlab_ci_deploy_password | default('') | length > 0
+    - gitlab_ci_deploy_user_result.changed | default(false) or (gitlab_ci_deploy_password_update | default(false) | bool)
+  changed_when: true

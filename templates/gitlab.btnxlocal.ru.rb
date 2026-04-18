@@ -1,3 +1,7 @@
+# Пример топологии btnx (HAProxy/Traefik + LDAP + OmniAuth). В плейбуке используйте шаблон gitlab.rb.all.j2
+# и переменные: gitlab_reverse_proxy_ssl_termination, gitlab_nginx_listen_addresses, gitlab_ldap_servers_ruby,
+# gitlab_omniauth_ruby, gitlab_gitlab_shell_ssh_port, gitlab_registry_*, и т.д. (см. defaults/main.yml).
+#
 ## Public URL (users access this via HAProxy/Traefik)
 external_url 'https://gitlab.btnxlocal.ru'
 

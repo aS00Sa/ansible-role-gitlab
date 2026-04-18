@@ -1,0 +1,59 @@
+---
+- name: Ensure self-service helper directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /usr/local/sbin
+    - /var/log/gitlab
+    - /var/lock
+
+- name: Install self-service cleanup script
+  ansible.builtin.template:
+    src: self-service-cleanup.sh.j2
+    dest: /usr/local/sbin/gitlab-self-service-cleanup.sh
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Configure self-service temp cleanup cron
+  ansible.builtin.cron:
+    name: gitlab-self-service-cleanup
+    user: "{{ gitlab_self_service_cleanup_cron_user }}"
+    minute: "{{ gitlab_self_service_cleanup_cron_minute }}"
+    hour: "{{ gitlab_self_service_cleanup_cron_hour }}"
+    day: "{{ gitlab_self_service_cleanup_cron_day }}"
+    month: "{{ gitlab_self_service_cleanup_cron_month }}"
+    weekday: "{{ gitlab_self_service_cleanup_cron_weekday }}"
+    job: "/usr/local/sbin/gitlab-self-service-cleanup.sh"
+
+- name: Install self-service registry GC script
+  ansible.builtin.template:
+    src: self-service-registry-gc.sh.j2
+    dest: /usr/local/sbin/gitlab-self-service-registry-gc.sh
+    owner: root
+    group: root
+    mode: "0750"
+  when: gitlab_self_service_registry_gc_enabled | default(false) | bool
+
+- name: Configure self-service registry GC cron
+  ansible.builtin.cron:
+    name: gitlab-self-service-registry-gc
+    user: "{{ gitlab_self_service_registry_gc_cron_user }}"
+    minute: "{{ gitlab_self_service_registry_gc_cron_minute }}"
+    hour: "{{ gitlab_self_service_registry_gc_cron_hour }}"
+    day: "{{ gitlab_self_service_registry_gc_cron_day }}"
+    month: "{{ gitlab_self_service_registry_gc_cron_month }}"
+    weekday: "{{ gitlab_self_service_registry_gc_cron_weekday }}"
+    job: "/usr/local/sbin/gitlab-self-service-registry-gc.sh"
+  when: gitlab_self_service_registry_gc_enabled | default(false) | bool
+
+- name: Remove self-service registry GC cron when disabled
+  ansible.builtin.cron:
+    name: gitlab-self-service-registry-gc
+    user: "{{ gitlab_self_service_registry_gc_cron_user }}"
+    state: absent
+  when: not (gitlab_self_service_registry_gc_enabled | default(false) | bool)

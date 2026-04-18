@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LOCK_FILE="{{ gitlab_self_service_diagnostics_lock_file }}"
+LOG_FILE="{{ gitlab_self_service_diagnostics_log_file }}"
+BASE_URL="{{ gitlab_external_url | regex_replace('/+$', '') }}"
+HTTP_PATH="{{ gitlab_self_service_diagnostics_http_path }}"
+HTTP_TIMEOUT="{{ gitlab_self_service_diagnostics_http_timeout | int }}"
+DISK_WARN="{{ gitlab_self_service_diagnostics_disk_used_warn_percent | int }}"
+INODE_WARN="{{ gitlab_self_service_diagnostics_inode_used_warn_percent | int }}"
+BACKUP_MAX_AGE_HOURS="{{ gitlab_self_service_diagnostics_backup_max_age_hours | int }}"
+BACKUP_DIR="{{ gitlab_backup_path }}"
+
+mkdir -p "$(dirname "$LOCK_FILE")" "$(dirname "$LOG_FILE")"
+touch "$LOG_FILE"
+
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  echo "[$(date -Is)] SKIP diagnostics (already running)" >> "$LOG_FILE"
+  exit 0
+fi
+
+warn() {
+  echo "[$(date -Is)] WARN: $*"
+}
+
+info() {
+  echo "[$(date -Is)] INFO: $*"
+}
+
+{
+  info "START diagnostics"
+
+  if gitlab-ctl status >/dev/null 2>&1; then
+    info "gitlab-ctl status OK"
+  else
+    warn "gitlab-ctl status failed"
+  fi
+
+  if curl --silent --show-error --max-time "$HTTP_TIMEOUT" --location --fail "${BASE_URL}${HTTP_PATH}" >/dev/null 2>&1; then
+    info "HTTP check OK (${BASE_URL}${HTTP_PATH})"
+  else
+    warn "HTTP check failed (${BASE_URL}${HTTP_PATH})"
+  fi
+
+  while IFS= read -r line; do
+    usage="$(awk '{print $5}' <<< "$line" | tr -d '%')"
+    mount_point="$(awk '{print $6}' <<< "$line")"
+    if [[ "$usage" =~ ^[0-9]+$ ]] && (( usage >= DISK_WARN )); then
+      warn "disk usage ${usage}% on ${mount_point} (threshold ${DISK_WARN}%)"
+    fi
+  done < <(df -P /var/opt/gitlab /var/log/gitlab 2>/dev/null | tail -n +2)
+
+  while IFS= read -r line; do
+    usage="$(awk '{print $5}' <<< "$line" | tr -d '%')"
+    mount_point="$(awk '{print $6}' <<< "$line")"
+    if [[ "$usage" =~ ^[0-9]+$ ]] && (( usage >= INODE_WARN )); then
+      warn "inode usage ${usage}% on ${mount_point} (threshold ${INODE_WARN}%)"
+    fi
+  done < <(df -Pi /var/opt/gitlab /var/log/gitlab 2>/dev/null | tail -n +2)
+
+  if [[ -d "$BACKUP_DIR" ]]; then
+    latest_backup_epoch="$(find "$BACKUP_DIR" -maxdepth 1 -type f -name "*_gitlab_backup.tar" -printf '%T@\n' 2>/dev/null | sort -nr | head -n1 | cut -d. -f1)"
+    now_epoch="$(date +%s)"
+    if [[ -n "${latest_backup_epoch:-}" ]]; then
+      age_hours="$(( (now_epoch - latest_backup_epoch) / 3600 ))"
+      if (( age_hours > BACKUP_MAX_AGE_HOURS )); then
+        warn "latest backup is ${age_hours}h old (threshold ${BACKUP_MAX_AGE_HOURS}h)"
+      else
+        info "backup freshness OK (${age_hours}h)"
+      fi
+    else
+      warn "no backup archive found in ${BACKUP_DIR}"
+    fi
+  else
+    warn "backup directory missing: ${BACKUP_DIR}"
+  fi
+
+{% if gitlab_self_service_diagnostics_deep_check | default(false) | bool %}
+  if gitlab-rake gitlab:check SANITIZE=true >/dev/null 2>&1; then
+    info "gitlab-rake gitlab:check OK"
+  else
+    warn "gitlab-rake gitlab:check failed"
+  fi
+{% endif %}
+
+  info "DONE diagnostics"
+} >> "$LOG_FILE" 2>&1

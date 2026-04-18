@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LOCK_FILE="{{ gitlab_self_service_backup_lock_file }}"
+LOG_FILE="{{ gitlab_self_service_backup_log_file }}"
+SKIP_LIST="{% if (gitlab_self_service_backup_skip | default([])) | length > 0 %}{{ gitlab_self_service_backup_skip | join(',') }}{% endif %}"
+
+mkdir -p "$(dirname "$LOCK_FILE")" "$(dirname "$LOG_FILE")"
+touch "$LOG_FILE"
+
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  echo "[$(date -Is)] SKIP backup (already running)" >> "$LOG_FILE"
+  exit 0
+fi
+
+{
+  echo "[$(date -Is)] START backup"
+  if [[ -n "$SKIP_LIST" ]]; then
+    SKIP="$SKIP_LIST" gitlab-backup create
+  else
+    gitlab-backup create
+  fi
+  echo "[$(date -Is)] DONE backup"
+} >> "$LOG_FILE" 2>&1

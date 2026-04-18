@@ -1,0 +1,31 @@
+---
+- name: Ensure self-service helper directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - /usr/local/sbin
+    - /var/log/gitlab
+    - /var/lock
+
+- name: Install self-service backup script
+  ansible.builtin.template:
+    src: self-service-backup.sh.j2
+    dest: /usr/local/sbin/gitlab-self-service-backup.sh
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Configure self-service backup cron
+  ansible.builtin.cron:
+    name: gitlab-self-service-backup
+    user: "{{ gitlab_self_service_backup_cron_user }}"
+    minute: "{{ gitlab_self_service_backup_cron_minute }}"
+    hour: "{{ gitlab_self_service_backup_cron_hour }}"
+    day: "{{ gitlab_self_service_backup_cron_day }}"
+    month: "{{ gitlab_self_service_backup_cron_month }}"
+    weekday: "{{ gitlab_self_service_backup_cron_weekday }}"
+    job: "/usr/local/sbin/gitlab-self-service-backup.sh"

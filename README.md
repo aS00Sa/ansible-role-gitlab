@@ -18,25 +18,41 @@ GitLab's default administrator account details are below; be sure to login immed
    source .venv/bin/activate
    pip install -U pip
    pip install -r requirements.txt
-   
-   ssh-copy-id -i /mnt/c/Users/x-shu/.ssh/id_rsa.pub debian@gitlab
-   
-   ANSIBLE_STDOUT_CALLBACK=yaml ANSIBLE_CONFIG="$PWD/ansible.cfg" ansible-playbook -i inventory.ini install.yml -u debian --private-key ~/.ssh/id_rsa 2>&1 | tee deploy-$(date +%Y%m%d-%H%M).log
+   # Дальше либо оставьте venv активным, либо вызывайте .venv/bin/ansible-playbook явно.
+
+   # Ключ должен быть в authorized_keys пользователя из inventory (для inventory-localdomain.ini это debian).
+   ssh-copy-id -i /mnt/c/Users/x-shu/.ssh/id_ed25519.pub debian@192.168.1.71
+
+   # Деплой из каталога репозитория (Linux / WSL). В install.yml уже задано become: true — подключаетесь как debian, модули идут с sudo на root.
+   # Неверно: install.yml >&1 -vvv (перенаправление до -vvv). Верно: сначала аргументы playbook, потом -vvv, потом 2>&1 | tee.
+   set -o pipefail
+   ANSIBLE_STDOUT_CALLBACK=yaml ANSIBLE_CONFIG="$PWD/ansible.cfg" .venv/bin/ansible-playbook \
+     -i inventory-localdomain.ini -u debian -b --become-user root \
+     --private-key "$HOME/.ssh/id_ed25519" \
+     install.yml -vvv 2>&1 | tee "install-$(date +%Y%m%d-%H%M).log"
+
+   # Другой ключ (например RSA): замените путь в --private-key. Ключи на /mnt/c/... часто с правами 0777 — ssh их отклоняет; скопируйте в WSL и выставьте 600:
+   #   mkdir -p ~/.ssh && cp /mnt/c/Users/USER/.ssh/id_rsa ~/.ssh/id_rsa && chmod 600 ~/.ssh/id_rsa
+   #   ... --private-key "$HOME/.ssh/id_rsa" ...
+
+   # Если не передаёте --private-key, можно задать в inventory: ansible_ssh_private_key_file=~/.ssh/id_ed25519
 
    # Удаление пакета Omnibus (данные по умолчанию не трогаем):
-   # ansible-playbook -i inventory.ini remove.yml -u debian --private-key ~/.ssh/id_rsa
+   # .venv/bin/ansible-playbook -i inventory-localdomain.ini -u debian -b --private-key ~/.ssh/id_ed25519 remove.yml
    # Полное стирание /etc/gitlab, /var/opt/gitlab и т.д.:
-   # ansible-playbook -i inventory.ini remove.yml -e gitlab_remove_purge_data=true
+   # .venv/bin/ansible-playbook -i inventory-localdomain.ini -u debian -b --private-key ~/.ssh/id_ed25519 remove.yml -e gitlab_remove_purge_data=true
    ```
 
 ## Role Variables
 
 Available variables are listed below, along with default values (see `defaults/main.yml`):
 
-    gitlab_domain: gitlab
-    gitlab_external_url: "https://{{ gitlab_domain }}/"
+    gitlab_domain: ""  # задайте в inventory / group_vars / -e (в роли без FQDN по умолчанию)
+    gitlab_external_url: "http://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
 
-The domain and URL at which the GitLab instance will be accessible. This is set as the `external_url` configuration setting in `gitlab.rb`, and if you want to run GitLab on a different port (besides 80/443), you can specify the port here (e.g. `https://gitlab:8443/` for port 8443).
+The FQDN (`gitlab_domain`) must be set outside the role (inventory host vars, `group_vars`, or `-e`). There is no hardcoded production hostname in `defaults/main.yml`. The URL is the Omnibus `external_url`; set `gitlab_ext_port` and switch to `https://` when using TLS on HAProxy/Traefik. For a non-default HTTP port, include it in the URL (e.g. port 8443 behind a reverse proxy).
+
+**CI / автодеплой (Linux на ВМ):** роль создаёт системного пользователя `gitlab-ci` с паролем из `gitlab_ci_deploy_password` (по умолчанию `CHANGE_ME` — смените через Ansible Vault или `-e`). Пароль обновляется только при создании пользователя; чтобы принудительно обновить: `gitlab_ci_deploy_password_update: true`. Отключить создание пользователя: `gitlab_ci_deploy_user_enabled: false`.
 
     gitlab_git_data_dir: "/var/opt/gitlab/git-data"
 
@@ -66,7 +82,7 @@ The edition of GitLab to install. Usually either `gitlab-ce` (Community Edition)
 
 If you'd like to install a specific version, set the version here (e.g. `11.4.0-ce.0` for Debian/Ubuntu, or `11.4.0-ce.0.el7` for RedHat/CentOS).
 
-    gitlab_config_template: "gitlab.rb.j2"
+    gitlab_config_template: "gitlab.rb.all.j2"
 
 The `gitlab.rb.j2` template packaged with this role is meant to be very generic and serve a variety of use cases. However, many people would like to have a much more customized version, and so you can override this role's default template with your own, adding any additional customizations you need. To do this:
 
@@ -225,3 +241,76 @@ TRUSTED_IPV6_SOURCES по умолчанию пусто; при необходи
 ICMP по-прежнему можно оставить глобально (ALLOW_ICMP=1) — это не TCP-порты, нужно для PMTUD; при желании отключите переменными.
 Если GitLab с интернета должен видеть только edge (например HAProxy) с публичным IP — этот IP нужно добавить в TRUSTED_IPV4_SOURCES, иначе с «белых» адресов сервисные порты будут закрыты.
 Переменные и описание обновлены в iptables/README.md.
+
+
+
+Проектируемый набор self-service (модули роли)
+Идея: один общий флаг gitlab_self_service_enabled: true|false и подфлаги по подсистемам, чтобы Molecule/минимальные стенды не тащили лишнее.
+
+1. Бэкапы (полный цикл)
+Слой	Назначение
+Уже есть
+backup_path, backup_keep_time — согласованы с будущим cron.
+Добавить
+Расписание: либо встроенный cron Omnibus (gitlab_rails['backup_cron_*'] в gitlab.rb, если версия поддерживает и это приемлемо), либо systemd timer / cron на хосте с gitlab-backup create и SKIP=… по необходимости.
+Опционально
+После успешного бэкапа: rsync/rclone/object storage — отдельные переменные (gitlab_backup_remote_*), чтобы копия жила вне ВМ.
+Политика
+gitlab_backup_strategy: только локально / локально + удалённо; таймауты; сжатие; исключения (registry, uploads) через env или обёртку — всё в defaults с безопасными значениями по умолчанию выключено для удалённой копии.
+Автономность: инстанс сам создаёт дампы и подчищает старые по backup_keep_time; при сбое диска спасает только удалённая копия — её стоит проектировать как отдельный шаг.
+
+2. Логи
+Слой	Назначение
+Проверить документацию Omnibus для текущей ветки GitLab: что уже ротируется Chef’ом.
+Добавить при необходимости
+Шаблон /etc/logrotate.d/gitlab-ansible (или доп. файл) для /var/log/gitlab/*, с параметрами rotate, size, compress, copytruncate/postrotate согласно рекомендациям GitLab — только если нужно жёстче или проще для эксплуатации.
+Опционально в gitlab.rb
+Уровни логирования Rails/nginx (через gitlab_extra_settings / отдельные ключи), чтобы на проде не писать debug.
+Автономность: диск не забивается логами без ручного вмешательства.
+
+3. Временные файлы и обслуживание
+Область	Действие
+Каталоги Omnibus
+Периодическая безопасная очистка известных tmp (с возрастом файлов > N дней), без трогания git-data и backups.
+Registry
+По флагу: gitlab-ctl registry-garbage-collect (read-only или с остановкой — по доке и окну обслуживания).
+Устаревшие бэкапы
+Уже покрыто backup_keep_time; при удалённом sync — политика retention на приёмнике.
+CI/кэши
+Если на этой же ВМ крутятся runner’ы — отдельная задача или отдельная роль; в этой роли только упоминание в README.
+Автономность: предсказуемый рост /var/opt/gitlab под контролем.
+
+4. Базовая самодиагностика
+Цель — лёгкие, идемпотентные проверки при деплое и опционально по cron с логом.
+
+Проверка	Как
+Сервисы
+gitlab-ctl status (разбор RC / ключевых сервисов).
+Приложение
+gitlab-rake gitlab:check (может быть шумным — флаг «только при gitlab_self_service_deep_check»).
+Диск / inode
+Пороги для ansible.builtin.assert при деплое; для cron — запись в /var/log/gitlab-selfcheck.log или logger.
+HTTP
+uri к external_url + /users/sign_in или -/health (в зависимости от версии/конфига), таймаут короткий.
+Бэкап «свежесть»
+Если включён cron бэкапов — файл-маркер или max age последнего .tar в backup_path.
+Не смешивать с «мониторингом кластера»: это минимальный sanity layer для одиночной ВМ.
+
+Организация в репозитории (реализовано)
+tasks/self_service.yml — общий include_tasks, вызывается из main.yml когда gitlab_self_service_enabled.
+Подключаемые подмодули:
+- tasks/self_service_backup.yml
+- tasks/self_service_logrotate.yml
+- tasks/self_service_cleanup.yml
+- tasks/self_service_diagnostics.yml
+
+Шаблоны:
+- templates/self-service-backup.sh.j2
+- templates/gitlab-self-service.logrotate.j2
+- templates/self-service-cleanup.sh.j2
+- templates/self-service-registry-gc.sh.j2
+- templates/self-service-diagnostics.sh.j2
+
+defaults/main.yml — все self-service переменные с безопасными дефолтами (по умолчанию всё выключено).
+
+

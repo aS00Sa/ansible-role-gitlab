@@ -1,0 +1,64 @@
+---
+# TLS из локального PKI (только leaf + intermediate для nginx). root-ca.crt / root-ca.key сюда не подключаются и на хост не копируются.
+- name: Assert PKI source directory is configured
+  ansible.builtin.assert:
+    that:
+      - gitlab_pki_source_dir | default('') | trim | length > 0
+    fail_msg: "Задайте gitlab_pki_source_dir (каталог на контроллере с PEM generate-certs)."
+
+- name: Normalize PKI base path on controller
+  ansible.builtin.set_fact:
+    _gitlab_pki_base: "{{ gitlab_pki_source_dir | trim | regex_replace('[\\\\/]$', '') }}"
+
+- name: Build PKI file paths (явные имена — без root-ca.*)
+  ansible.builtin.set_fact:
+    _gitlab_pki_leaf: "{{ _gitlab_pki_base }}/{{ gitlab_pki_leaf_crt }}"
+    _gitlab_pki_intermediate: "{{ _gitlab_pki_base }}/{{ gitlab_pki_intermediate_crt }}"
+    _gitlab_pki_key_src: "{{ _gitlab_pki_base }}/{{ gitlab_pki_leaf_key }}"
+
+- name: Assert PKI file names do not reference root CA material
+  ansible.builtin.assert:
+    that:
+      - "'root-ca' not in gitlab_pki_leaf_crt"
+      - "'root-ca' not in gitlab_pki_intermediate_crt"
+      - "'root-ca' not in gitlab_pki_leaf_key"
+    fail_msg: "Используйте только leaf/intermediate; root-ca.* не должны фигурировать в именах файлов PKI."
+
+- name: Stat PKI inputs on controller (leaf, intermediate, key)
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  delegate_to: localhost
+  become: false
+  loop:
+    - "{{ _gitlab_pki_leaf }}"
+    - "{{ _gitlab_pki_intermediate }}"
+    - "{{ _gitlab_pki_key_src }}"
+  register: gitlab_pki_stat
+
+- name: Fail if PKI file missing on controller
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists | bool
+      - item.stat.isreg | bool
+    fail_msg: "Нет файла на контроллере: {{ item.item }}"
+  loop: "{{ gitlab_pki_stat.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Install GitLab nginx fullchain (leaf + intermediate CA, без root в цепочке)
+  ansible.builtin.copy:
+    dest: "{{ gitlab_ssl_certificate }}"
+    content: "{{ lookup('file', _gitlab_pki_leaf) }}\n{{ lookup('file', _gitlab_pki_intermediate) }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart gitlab
+
+- name: Install GitLab nginx private key (только ключ конечного сертификата)
+  ansible.builtin.copy:
+    src: "{{ _gitlab_pki_key_src }}"
+    dest: "{{ gitlab_ssl_certificate_key }}"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: restart gitlab

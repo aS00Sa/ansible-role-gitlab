@@ -1,8 +1,32 @@
 ---
+# Система: локаль и часовой пояс на ВМ (выполняется в начале роли). Отключить: gitlab_enforce_system_locale: false
+gitlab_enforce_system_locale: true
+gitlab_system_locale: ru_RU.UTF-8
+gitlab_system_timezone: Europe/Moscow
+
+# Системный пользователь на ВМ для автоматического деплоя (SSH, ansible-playbook, runner и т.п.).
+# Задайте свой пароль через vault / -e; при смене пароля: gitlab_ci_deploy_password_update: true (один прогон).
+gitlab_ci_deploy_user_enabled: true
+gitlab_ci_deploy_username: gitlab-ci
+gitlab_ci_deploy_password: "CHANGE_ME"
+gitlab_ci_deploy_password_update: false
+
 # General config.
-gitlab_domain: gitlab.localdomain
+# FQDN GitLab — только из inventory / group_vars / -e (в роли намеренно без значения по умолчанию).
+gitlab_domain: ""
 gitlab_ext_port: 8443
-gitlab_external_url: "https://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
+# По умолчанию HTTP на порту gitlab_ext_port. Для HTTPS задайте https:// и TLS (см. блок SSL).
+gitlab_external_url: "http://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
+# При external_url http:// — в gitlab.rb выставляется session cookie без Secure (см. шаблон). Отключить: false.
+gitlab_session_store_insecure_cookie_for_http: true
+# allowed_hosts: см. tasks/allowed_hosts.yml — авто из gitlab_domain + ansible_host + суффикс, без литералов домена в YAML.
+gitlab_allowed_hosts_enabled: true
+gitlab_allowed_hosts_auto_merge: true
+# Дополнительные хосты к списку (опционально). Суффикс 127.0.0.1/localhost задаётся в gitlab_allowed_hosts_static_suffix.
+gitlab_allowed_hosts: []
+gitlab_allowed_hosts_static_suffix:
+  - 127.0.0.1
+  - localhost
 gitlab_git_data_dir: "/var/opt/gitlab/git-data"
 gitlab_edition: "gitlab-ce"
 # Пустая строка — ставится последняя версия из репозитория GitLab (рекомендуется).
@@ -11,7 +35,7 @@ gitlab_edition: "gitlab-ce"
 # (не "18.9.1" — такого пакета в apt нет). Для RHEL суффикс другой, см. документацию GitLab.
 gitlab_version: ""
 gitlab_backup_path: "/var/opt/gitlab/backups"
-gitlab_config_template: "gitlab.rb.j2"
+gitlab_config_template: "gitlab.rb.all.j2"
 
 # LetsEncrypt configuration.
 gitlab_letsencrypt_enable: false
@@ -21,14 +45,66 @@ gitlab_letsencrypt_auto_renew_minute: 30
 gitlab_letsencrypt_auto_renew_day_of_month: "*/7"
 gitlab_letsencrypt_auto_renew: true
 
-# SSL Configuration.
+# SSL / TLS (по умолчанию выключено: GitLab по HTTP, nginx без ssl_certificate в gitlab.rb).
+# PEM можно держать в репозитории в files/pki/ — роль их не копирует на сервер, пока gitlab_deploy_pki_tls: false.
 gitlab_redirect_http_to_https: false
 # Дублирует смысл nginx['redirect_http_to_https']; если не задано, в шаблоне берётся gitlab_redirect_http_to_https.
 #gitlab_nginx_redirect_http_to_https: false
-#gitlab_ssl_certificate: "/etc/gitlab/ssl/{{ gitlab_domain }}.crt"
-#gitlab_ssl_certificate_key: "/etc/gitlab/ssl/{{ gitlab_domain }}.key"
+# Пути на целевой ВМ (после включения PKI или самоподписи). Без TLS в gitlab.rb не попадают.
+gitlab_ssl_certificate: "/etc/gitlab/ssl/{{ gitlab_domain }}.crt"
+gitlab_ssl_certificate_key: "/etc/gitlab/ssl/{{ gitlab_domain }}.key"
+# Явно включить строки ssl_certificate в gitlab.rb, если сертификаты уже лежат на ВМ вручную (без задач роли).
+gitlab_nginx_tls_enabled: false
+#
+# Режим A — PKI из каталога на контроллере (leaf + intermediate в nginx, без root-ca на хосте):
+#   gitlab_external_url: "https://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
+#   gitlab_deploy_pki_tls: true
+#   gitlab_create_self_signed_cert: false
+#   gitlab_pki_source_dir: "{{ playbook_dir }}/files/pki"
+# Режим B — самоподпись на ВМ:
+#   gitlab_external_url: "https://..."
+#   gitlab_create_self_signed_cert: true
+#   gitlab_deploy_pki_tls: false
+gitlab_create_self_signed_cert: false
+gitlab_self_signed_cert_subj: "/O=GitLab Ansible/CN={{ gitlab_domain }}"
+#
+gitlab_deploy_pki_tls: false
+# Обычно "{{ playbook_dir }}/files/pki" (в репозитории уже лежат PEM; по умолчанию роль их не использует).
+gitlab_pki_source_dir: ""
+gitlab_pki_leaf_crt: localdomain.crt
+gitlab_pki_intermediate_crt: intermediate-ca.crt
+gitlab_pki_leaf_key: localdomain.key
+# Не используем ca-chain.localdomain.crt / localdomain.chain.crt в nginx bundle: там часто есть root; для клиентов достаточно leaf + intermediate-ca.crt.
+# intermediate-ca.key и root-ca.* на сервер GitLab не копируются (ключ ЦС не должен лежать на приложении).
+#
 gitlab_nginx_listen_port: "{{ gitlab_ext_port }}"
 gitlab_nginx_listen_https: false
+# Как в templates/gitlab.btnxlocal.ru.rb: явный HTTP listener; адреса — если пусто, слушает все интерфейсы.
+gitlab_nginx_listen_http: true
+gitlab_nginx_listen_addresses: []
+# TLS на HAProxy/Traefik: public URL https, nginx узла без локальных PEM (см. gitlab.rb.all.j2).
+gitlab_reverse_proxy_ssl_termination: false
+
+# GitLab Shell (SSH Git)
+gitlab_gitlab_shell_ssh_port: 22
+gitlab_gitlab_shell_git_timeout: 10800
+
+# Registry (gitlab_rails + registry_external_url), путь данных как в btnxlocal
+gitlab_registry_host: "{{ gitlab_domain }}"
+gitlab_registry_path: "/var/opt/gitlab/gitlab-rails/shared/registry"
+# Не заставлять registry_nginx ждать TLS на узле, если нет registry PEM (типично при TLS на прокси).
+gitlab_registry_nginx_http_only: true
+# Пусто — как у основного nginx (gitlab_nginx_listen_port).
+gitlab_registry_nginx_listen_port: ""
+
+# LDAP в формате gitlab.rb как в btnx: многострочный Ruby в gitlab_ldap_servers_ruby (иначе — простой режим gitlab_ldap_*).
+gitlab_ldap_servers_ruby: ""
+# OmniAuth (Keycloak и т.д.): полный блок Ruby, например gitlab_rails['omniauth_enabled'] = true и gitlab_rails['omniauth_providers'] = [...]
+gitlab_omniauth_ruby: ""
+gitlab_prevent_ldap_sign_in: false
+
+# Произвольный хвост gitlab.rb (редко нужен, если не хватает gitlab_extra_settings).
+gitlab_gitlab_rb_extra: ""
 
 # --- hifis.toolkit-style Omnibus toggles (см. templates/gitlab.rb.j2) ---
 gitlab_use_internal_redis: true
@@ -57,10 +133,7 @@ gitlab_postgresql_db_password: "changeme"
 # Вызовы верхнего уровня в gitlab.rb (как в hifis.toolkit gitlab_ruby_configuration_calls).
 #gitlab_ruby_configuration_calls: []
 
-# SSL Self-signed Certificate Configuration.
-# false — Omnibus не создаёт самоподписанный сертификат (типично при TLS на reverse-proxy / внешнем LB).
-gitlab_create_self_signed_cert: false
-#gitlab_self_signed_cert_subj: "/C=US/ST=Missouri/L=Saint Louis/O=IT/CN={{ gitlab_domain }}"
+# Самоподписанный сертификат и пути PEM — см. блок «SSL Configuration» выше (gitlab_create_self_signed_cert, gitlab_ssl_certificate*).
 
 # LDAP Configuration (при gitlab_ldap_enabled: true задайте host/base и остальное под ваш каталог).
 gitlab_ldap_enabled: false
@@ -104,14 +177,89 @@ gitlab_backup_keep_time: "604800"
 gitlab_download_validate_certs: true
 gitlab_default_theme: "2"
 
-# Sign-up / registration settings.
-# WARNING: For public instances, it's recommended to disable open registration.
+# Открытая регистрация (Sign up) на странице входа. По умолчанию выключена.
+# Включить только осознанно (например тестовый стенд): gitlab_signup_enabled: true
 gitlab_signup_enabled: false
 
-# Two-factor authentication (2FA) policy.
-# If true, all users will be required to enable 2FA within a grace period.
+# --- Self-service (all disabled by default) ---
+# Master switch for autonomous maintenance tasks.
+gitlab_self_service_enabled: false
+
+# Backups: create local backup archives on schedule (gitlab-backup create).
+gitlab_self_service_backup_enabled: false
+gitlab_self_service_backup_cron_minute: "20"
+gitlab_self_service_backup_cron_hour: "2"
+gitlab_self_service_backup_cron_day: "*"
+gitlab_self_service_backup_cron_month: "*"
+gitlab_self_service_backup_cron_weekday: "*"
+gitlab_self_service_backup_cron_user: root
+gitlab_self_service_backup_skip: []
+gitlab_self_service_backup_log_file: "/var/log/gitlab/self-service-backup.log"
+gitlab_self_service_backup_lock_file: "/var/lock/gitlab-self-service-backup.lock"
+
+# Log rotation for GitLab logs (extra safety layer over Omnibus defaults).
+gitlab_self_service_logrotate_enabled: false
+gitlab_self_service_logrotate_frequency: daily
+gitlab_self_service_logrotate_rotate: 14
+gitlab_self_service_logrotate_maxsize: "200M"
+gitlab_self_service_logrotate_compress: true
+gitlab_self_service_logrotate_delaycompress: true
+gitlab_self_service_logrotate_copytruncate: true
+
+# Cleanup old temporary files from known GitLab temp paths.
+gitlab_self_service_cleanup_enabled: false
+gitlab_self_service_cleanup_cron_minute: "40"
+gitlab_self_service_cleanup_cron_hour: "3"
+gitlab_self_service_cleanup_cron_day: "*"
+gitlab_self_service_cleanup_cron_month: "*"
+gitlab_self_service_cleanup_cron_weekday: "*"
+gitlab_self_service_cleanup_cron_user: root
+gitlab_self_service_cleanup_age_days: 7
+gitlab_self_service_cleanup_remove_empty_dirs: true
+gitlab_self_service_cleanup_log_file: "/var/log/gitlab/self-service-cleanup.log"
+gitlab_self_service_cleanup_lock_file: "/var/lock/gitlab-self-service-cleanup.lock"
+gitlab_self_service_cleanup_paths:
+  - "/var/opt/gitlab/gitlab-rails/shared/tmp"
+  - "/var/opt/gitlab/gitlab-rails/shared/cache"
+  - "/var/opt/gitlab/gitlab-rails/tmp"
+  - "/var/opt/gitlab/gitlab-workhorse"
+
+# Optional registry garbage-collection schedule.
+gitlab_self_service_registry_gc_enabled: false
+gitlab_self_service_registry_gc_cron_minute: "10"
+gitlab_self_service_registry_gc_cron_hour: "4"
+gitlab_self_service_registry_gc_cron_day: "*"
+gitlab_self_service_registry_gc_cron_month: "*"
+gitlab_self_service_registry_gc_cron_weekday: "0"
+gitlab_self_service_registry_gc_cron_user: root
+gitlab_self_service_registry_gc_log_file: "/var/log/gitlab/self-service-registry-gc.log"
+gitlab_self_service_registry_gc_lock_file: "/var/lock/gitlab-self-service-registry-gc.lock"
+
+# Baseline self-diagnostics schedule and thresholds.
+gitlab_self_service_diagnostics_enabled: false
+gitlab_self_service_diagnostics_cron_minute: "*/30"
+gitlab_self_service_diagnostics_cron_hour: "*"
+gitlab_self_service_diagnostics_cron_day: "*"
+gitlab_self_service_diagnostics_cron_month: "*"
+gitlab_self_service_diagnostics_cron_weekday: "*"
+gitlab_self_service_diagnostics_cron_user: root
+gitlab_self_service_diagnostics_deep_check: false
+gitlab_self_service_diagnostics_http_path: "/-/health"
+gitlab_self_service_diagnostics_http_timeout: 10
+gitlab_self_service_diagnostics_disk_used_warn_percent: 85
+gitlab_self_service_diagnostics_inode_used_warn_percent: 85
+gitlab_self_service_diagnostics_backup_max_age_hours: 30
+gitlab_self_service_diagnostics_log_file: "/var/log/gitlab/self-service-diagnostics.log"
+gitlab_self_service_diagnostics_lock_file: "/var/lock/gitlab-self-service-diagnostics.lock"
+
+# Web IDE (VS Code в браузере): в Omnibus отключается фичефлагом :vscode_web_ide (gitlab-rails runner), не gitlab.rb.
+# Включить снова: gitlab_web_ide_enabled: true. Не вызывать runner: gitlab_web_ide_configure_feature_flag: false.
+gitlab_web_ide_enabled: false
+gitlab_web_ide_configure_feature_flag: true
+
+# Two-factor authentication (2FA): жёсткая политика по умолчанию — всем нужна 2FA, без льготного периода.
 gitlab_2fa_mandatory: true
-# Grace period in hours users have to enable 2FA after sign-in.
+# Часы до обязательного включения 2FA после входа; 0 — отсрочки нет (сразу требуется настроить 2FA).
 gitlab_2fa_grace_period_hours: 0
 
 # Email configuration (поля нужны, если gitlab_email_enabled: true).
@@ -125,8 +273,8 @@ gitlab_nginx_ssl_verify_client: ""
 gitlab_nginx_ssl_client_certificate: ""
 
 # Registry configuration.
-# Можно совпадать с gitlab_external_url (тот же хост и порт): тогда Git/HTTPS и Docker
-# registry идут на один адрес; Omnibus-Nginx маршрутизирует /v2/ на registry.
+# Можно совпадать с gitlab_external_url (тот же хост и порт): тогда Git и Docker registry
+# идут на один адрес; Omnibus-Nginx маршрутизирует /v2/ на registry.
 # Переопределите только gitlab_registry_external_url, если registry на другом хосте/порту.
 gitlab_registry_enable: true
 # gitlab_registry_ext_port: 5050
@@ -139,17 +287,18 @@ gitlab_registry_external_url: "{{ gitlab_external_url }}"
 # Use CIDR strings. Include only networks you trust.
 gitlab_monitoring_whitelist:
   - "127.0.0.0/8"
-  - "::1/128"
+  - "::1"
   - "10.0.0.0/8"
   - "172.16.0.0/12"
   - "192.168.0.0/16"
 
+# Не задавайте ::1 в gitlab_trusted_proxies: в сгенерированном gitlab.yml строка без кавычек, Psych читает ::1 как Symbol и Rails падает при IPAddr.new.
+# Локальный IPv6 всё равно доверяется (см. config/initializers/trusted_proxies.rb в GitLab).
 # gitlab_trusted_proxies — уровень Rails/GitLab приложения.
 # Нужен, чтобы само приложение считало эти прокси доверенными при обработке forwarded-заголовков 
 # и client IP внутри GitLab (логи, проверки, ограничения, audit и т.д.).
 gitlab_trusted_proxies:
   - "127.0.0.0/8"
-  - "::1/128"
   - "10.0.0.0/8"
   - "172.16.0.0/12"
   - "192.168.0.0/16"
@@ -158,7 +307,7 @@ gitlab_trusted_proxies:
 # Нужен, чтобы NGINX доверял X-Forwarded-For только от ваших прокси/LB и корректно вычислял реальный IP клиента.
 gitlab_nginx_real_ip_trusted_addresses:
   - "127.0.0.0/8"
-  - "::1/128"
+  - "::1"
   - "10.0.0.0/8"
   - "172.16.0.0/12"
   - "192.168.0.0/16"

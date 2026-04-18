@@ -5,6 +5,8 @@
 
   vars:
     gitlab_restart_handler_failed_when: false
+    # Тестовый FQDN для Molecule (в роли gitlab_domain по умолчанию пустой).
+    gitlab_domain: gitlab.molecule.test
 
   pre_tasks:
     - name: Update apt cache.

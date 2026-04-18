@@ -1,0 +1,16 @@
+---
+- name: Configure self-service backup automation
+  ansible.builtin.include_tasks: self_service_backup.yml
+  when: gitlab_self_service_backup_enabled | default(false) | bool
+
+- name: Configure self-service log rotation
+  ansible.builtin.include_tasks: self_service_logrotate.yml
+  when: gitlab_self_service_logrotate_enabled | default(false) | bool
+
+- name: Configure self-service temporary file cleanup
+  ansible.builtin.include_tasks: self_service_cleanup.yml
+  when: gitlab_self_service_cleanup_enabled | default(false) | bool
+
+- name: Configure self-service diagnostics
+  ansible.builtin.include_tasks: self_service_diagnostics.yml
+  when: gitlab_self_service_diagnostics_enabled | default(false) | bool

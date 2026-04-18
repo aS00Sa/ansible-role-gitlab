@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+LOCK_FILE="{{ gitlab_self_service_cleanup_lock_file }}"
+LOG_FILE="{{ gitlab_self_service_cleanup_log_file }}"
+AGE_DAYS="{{ gitlab_self_service_cleanup_age_days | int }}"
+
+mkdir -p "$(dirname "$LOCK_FILE")" "$(dirname "$LOG_FILE")"
+touch "$LOG_FILE"
+
+exec 9>"$LOCK_FILE"
+if ! flock -n 9; then
+  echo "[$(date -Is)] SKIP cleanup (already running)" >> "$LOG_FILE"
+  exit 0
+fi
+
+{
+  echo "[$(date -Is)] START cleanup"
+{% for path in gitlab_self_service_cleanup_paths | default([]) %}
+  if [[ -d "{{ path }}" ]]; then
+    find "{{ path }}" -xdev -type f -mtime "+${AGE_DAYS}" -print -delete || true
+{% if gitlab_self_service_cleanup_remove_empty_dirs | default(true) | bool %}
+    find "{{ path }}" -xdev -mindepth 1 -type d -empty -print -delete || true
+{% endif %}
+  fi
+{% endfor %}
+  echo "[$(date -Is)] DONE cleanup"
+} >> "$LOG_FILE" 2>&1

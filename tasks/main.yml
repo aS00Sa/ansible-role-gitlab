@@ -2,6 +2,18 @@
 - name: Include OS-specific variables.
   include_vars: "{{ ansible_os_family }}.yml"
 
+- name: Require gitlab_domain (задаётся вне роли — inventory, group_vars, -e)
+  ansible.builtin.assert:
+    that:
+      - gitlab_domain | default('', true) | string | trim | length > 0
+    fail_msg: >-
+      Укажите gitlab_domain (FQDN), например в inventory у хоста или в group_vars.
+      В defaults/main.yml значение пустое — без захардкоженного домена.
+
+- name: Enforce system locale (ru_RU.UTF-8) and timezone (Europe/Moscow)
+  ansible.builtin.include_tasks: locale.yml
+  when: gitlab_enforce_system_locale | default(true) | bool
+
 - name: Check if GitLab configuration file already exists.
   stat: path=/etc/gitlab/gitlab.rb
   register: gitlab_config_file
@@ -21,6 +33,10 @@
     name: gnupg2
     state: present
   when: ansible_os_family == 'Debian'
+
+- name: Create CI deploy system user (gitlab-ci)
+  ansible.builtin.include_tasks: ci_deploy_user.yml
+  when: gitlab_ci_deploy_user_enabled | default(true) | bool
 
 - name: Download GitLab repository installation script.
   get_url:
@@ -47,6 +63,53 @@
   poll: 5
   when: not gitlab_file.stat.exists
 
+# Уже установленный Omnibus: подтянуть последнюю версию из репозитория (gitlab_version пустой) или пин (gitlab_version задан).
+- name: Upgrade GitLab to latest from repository (Debian, no version pin)
+  apt:
+    name: "{{ gitlab_edition }}"
+    state: latest
+    update_cache: true
+  async: 1800
+  poll: 10
+  notify: restart gitlab
+  when:
+    - gitlab_file.stat.exists | bool
+    - ansible_os_family == 'Debian'
+    - (gitlab_version | default('') | length) == 0
+
+- name: Ensure GitLab matches pinned package version (Debian)
+  apt:
+    name: "{{ gitlab_package_name }}"
+    state: present
+    update_cache: true
+  async: 1800
+  poll: 10
+  notify: restart gitlab
+  when:
+    - gitlab_file.stat.exists | bool
+    - ansible_os_family == 'Debian'
+    - (gitlab_version | default('') | length) > 0
+
+- name: Upgrade GitLab to latest from repository (RedHat, no version pin)
+  package:
+    name: "{{ gitlab_edition }}"
+    state: latest
+  notify: restart gitlab
+  when:
+    - gitlab_file.stat.exists | bool
+    - ansible_os_family == 'RedHat'
+    - (gitlab_version | default('') | length) == 0
+
+- name: Ensure GitLab matches pinned package version (RedHat)
+  package:
+    name: "{{ gitlab_package_name }}"
+    state: present
+  notify: restart gitlab
+  when:
+    - gitlab_file.stat.exists | bool
+    - ansible_os_family == 'RedHat'
+    - (gitlab_version | default('') | length) > 0
+
 # Start and configure GitLab. Sometimes the first run fails, but after that,
 # restarts fix problems, so ignore failures on this run.
 - name: Reconfigure GitLab (first run).
@@ -62,14 +125,23 @@
     owner: root
     group: root
     mode: 0700
-  when: gitlab_create_self_signed_cert
+  when: gitlab_create_self_signed_cert | bool or gitlab_deploy_pki_tls | default(false) | bool
+
+- name: Deploy TLS from PKI (leaf + intermediate, без root CA на хосте)
+  ansible.builtin.include_tasks: ssl_pki.yml
+  when: gitlab_deploy_pki_tls | default(false) | bool
 
 - name: Create self-signed certificate.
   command: >
     openssl req -new -nodes -x509 -subj "{{ gitlab_self_signed_cert_subj }}"
     -days 3650 -keyout {{ gitlab_ssl_certificate_key }} -out {{ gitlab_ssl_certificate }} -extensions v3_ca
     creates={{ gitlab_ssl_certificate }}
-  when: gitlab_create_self_signed_cert
+  when:
+    - gitlab_create_self_signed_cert | bool
+    - not (gitlab_deploy_pki_tls | default(false) | bool)
+
+- name: Compute gitlab_rails allowed_hosts for gitlab.rb template
+  ansible.builtin.include_tasks: allowed_hosts.yml
 
 - name: Copy GitLab configuration file.
   template:
@@ -99,3 +171,13 @@
     end"
   register: gitlab_anti_lockout_settings
   changed_when: "'Updated GitLab anti-lockout settings:' in gitlab_anti_lockout_settings.stdout"
+
+- name: Configure Web IDE feature flag (:vscode_web_ide)
+  ansible.builtin.include_tasks: web_ide.yml
+  when:
+    - gitlab_web_ide_configure_feature_flag | default(true) | bool
+    - gitlab_file.stat.exists | bool
+
+- name: Configure self-service mechanisms
+  ansible.builtin.include_tasks: self_service.yml
+  when: gitlab_self_service_enabled | default(false) | bool

@@ -1,0 +1,16 @@
+/var/log/gitlab/*.log /var/log/gitlab/*/*.log /var/log/gitlab/*/*/*.log {
+    {{ gitlab_self_service_logrotate_frequency }}
+    rotate {{ gitlab_self_service_logrotate_rotate | int }}
+    maxsize {{ gitlab_self_service_logrotate_maxsize }}
+    missingok
+    notifempty
+{% if gitlab_self_service_logrotate_compress | default(true) | bool %}
+    compress
+{% endif %}
+{% if gitlab_self_service_logrotate_delaycompress | default(true) | bool %}
+    delaycompress
+{% endif %}
+{% if gitlab_self_service_logrotate_copytruncate | default(true) | bool %}
+    copytruncate
+{% endif %}
+}

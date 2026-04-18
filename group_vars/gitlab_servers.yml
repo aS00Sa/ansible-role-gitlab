@@ -1,0 +1,32 @@
+---
+# Публичный доступ к GitLab обычно через HAProxy или Traefik; Omnibus-nginx на ВМ слушает HTTP на gitlab_ext_port (как в templates/gitlab.btnxlocal.ru.rb).
+# gitlab_domain задаётся в inventory (или -e); в defaults роли он пустой. При TLS на прокси — https в external_url и gitlab_reverse_proxy_ssl_termination.
+gitlab_ext_port: 8443
+gitlab_external_url: "http://{{ gitlab_domain }}:{{ gitlab_ext_port }}/"
+#
+# allowed_hosts собирает роль в tasks/allowed_hosts.yml (gitlab_domain, ansible_host из inventory).
+
+# --- Self-service (пример «боевого» профиля для группы gitlab_servers) ---
+# Ежедневный локальный backup (gitlab-backup create), еженедельный registry GC, диагностика каждые 30 мин.
+# logrotate / очистка tmp по умолчанию в роли выключены — включите при необходимости отдельными флагами.
+gitlab_self_service_enabled: true
+gitlab_self_service_backup_enabled: true
+gitlab_self_service_backup_cron_minute: "20"
+gitlab_self_service_backup_cron_hour: "2"
+gitlab_self_service_backup_cron_day: "*"
+gitlab_self_service_backup_cron_month: "*"
+gitlab_self_service_backup_cron_weekday: "*"
+
+gitlab_self_service_registry_gc_enabled: true
+gitlab_self_service_registry_gc_cron_minute: "10"
+gitlab_self_service_registry_gc_cron_hour: "4"
+gitlab_self_service_registry_gc_cron_day: "*"
+gitlab_self_service_registry_gc_cron_month: "*"
+gitlab_self_service_registry_gc_cron_weekday: "0"
+
+gitlab_self_service_diagnostics_enabled: true
+gitlab_self_service_diagnostics_cron_minute: "*/30"
+gitlab_self_service_diagnostics_cron_hour: "*"
+gitlab_self_service_diagnostics_cron_day: "*"
+gitlab_self_service_diagnostics_cron_month: "*"
+gitlab_self_service_diagnostics_cron_weekday: "*"
