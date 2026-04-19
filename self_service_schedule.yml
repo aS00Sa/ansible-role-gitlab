@@ -1,0 +1,20 @@
+---
+# Только создание/обновление плановых заданий самообслуживания на уже установленном GitLab:
+# бэкап (gitlab-backup), ротация логов, очистка tmp, registry GC, диагностика (cron + скрипты).
+# Установка пакета GitLab, gitlab.rb и полный прогон роли не выполняются.
+#
+# Переменные: gitlab_self_service_* (см. defaults/main.yml, group_vars/gitlab_servers.yml).
+#
+# Пример (WSL):
+#   ANSIBLE_STDOUT_CALLBACK=yaml ANSIBLE_CONFIG="$PWD/ansible.cfg" \
+#   ansible-playbook -i inventory-infra-btnxlocal.ini self_service_schedule.yml \
+#     -u root --private-key ~/.ssh/id_ed25519
+#
+- name: GitLab self-service scheduled jobs only
+  hosts: gitlab_servers
+  become: true
+  tasks:
+    - name: Apply self-service tasks from this role
+      ansible.builtin.include_role:
+        name: "{{ playbook_dir }}"
+        tasks_from: self_service_only

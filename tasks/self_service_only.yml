@@ -1,0 +1,8 @@
+---
+# Только плановые задания самообслуживания (cron, скрипты, logrotate).
+# Вызывается из playbook self_service_schedule.yml — без установки/обновления GitLab.
+- name: Include OS-specific variables
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+
+- name: Configure self-service mechanisms (backup, logrotate, cleanup, diagnostics)
+  ansible.builtin.include_tasks: self_service.yml

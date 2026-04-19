@@ -41,6 +41,9 @@ GitLab's default administrator account details are below; be sure to login immed
    # .venv/bin/ansible-playbook -i inventory-localdomain.ini -u debian -b --private-key ~/.ssh/id_ed25519 remove.yml
    # Полное стирание /etc/gitlab, /var/opt/gitlab и т.д.:
    # .venv/bin/ansible-playbook -i inventory-localdomain.ini -u debian -b --private-key ~/.ssh/id_ed25519 remove.yml -e gitlab_remove_purge_data=true
+
+   # Только плановые задания самообслуживания (cron: бэкап, logrotate, очистка, диагностика) — без установки GitLab:
+   # ANSIBLE_STDOUT_CALLBACK=yaml ANSIBLE_CONFIG="$PWD/ansible.cfg" ansible-playbook -i inventory-infra-btnxlocal.ini self_service_schedule.yml -u root --private-key ~/.ssh/id_ed25519
    ```
 
 ## Role Variables
